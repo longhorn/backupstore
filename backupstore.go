@@ -11,7 +11,7 @@ import (
 type Volume struct {
 	Name           string
 	Driver         string
-	Size           int64
+	Size           int64 `json:",string"`
 	CreatedTime    string
 	LastBackupName string
 }
