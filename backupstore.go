@@ -28,6 +28,7 @@ type Backup struct {
 	SnapshotName      string
 	SnapshotCreatedAt string
 	CreatedTime       string
+	Size              int64 `json:",string"`
 
 	Blocks     []BlockMapping `json:",omitempty"`
 	SingleFile BackupFile     `json:",omitempty"`
@@ -172,6 +173,7 @@ func fillBackupInfo(backup *Backup, volume *Volume, destURL string) map[string]s
 		"SnapshotName":      backup.SnapshotName,
 		"SnapshotCreatedAt": backup.SnapshotCreatedAt,
 		"CreatedTime":       backup.CreatedTime,
+		"Size":              strconv.FormatInt(backup.Size, 10),
 	}
 }
 
