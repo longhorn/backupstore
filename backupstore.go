@@ -23,7 +23,6 @@ type Snapshot struct {
 
 type Backup struct {
 	Name              string
-	Driver            string
 	VolumeName        string
 	SnapshotName      string
 	SnapshotCreatedAt string
