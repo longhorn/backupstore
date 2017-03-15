@@ -22,8 +22,8 @@ import (
 const (
 	driverName        = "BackupStoreTest"
 	volumeName        = "BackupStoreTestVolume"
-	volumeContentSize = 5 * 2 * 1024 * 1024       // snapshotCounts number of blocks
-	volumeSize        = (5 + 4) * 2 * 1024 * 1024 // snapshotCounts number of blocks + intented empty block
+	volumeContentSize = int64(5 * 2 * 1024 * 1024)       // snapshotCounts number of blocks
+	volumeSize        = int64((5 + 4) * 2 * 1024 * 1024) // snapshotCounts number of blocks + intented empty block
 	snapPrefix        = "volume_snap"
 	snapshotCounts    = 5
 )
@@ -72,13 +72,13 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 		return nil, err
 	}
 
-	blockSize := backupstore.DEFAULT_BLOCK_SIZE
+	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
 
 	if compareID == "" {
-		for i := 0; i < volumeContentSize/blockSize; i++ {
+		for i := int64(0); i < volumeContentSize/blockSize; i++ {
 			mappings.Mappings = append(mappings.Mappings, backupstore.Mapping{
-				Offset: int64(i * blockSize),
-				Size:   int64(blockSize),
+				Offset: i * blockSize,
+				Size:   blockSize,
 			})
 		}
 		return &mappings, nil
@@ -91,8 +91,8 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 		return nil, err
 	}
 
-	for i := 0; i < volumeContentSize/blockSize; i++ {
-		offset := int64(i * blockSize)
+	for i := int64(0); i < volumeContentSize/blockSize; i++ {
+		offset := i * blockSize
 		data1 := make([]byte, blockSize)
 		data2 := make([]byte, blockSize)
 		if _, err := snap1.ReadAt(data1, offset); err != nil {
@@ -104,7 +104,7 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 		if !reflect.DeepEqual(data1, data2) {
 			mappings.Mappings = append(mappings.Mappings, backupstore.Mapping{
 				Offset: offset,
-				Size:   int64(blockSize),
+				Size:   blockSize,
 			})
 		}
 	}
@@ -156,12 +156,13 @@ func (s *TestSuite) SetUpSuite(c *C) {
 
 	// Make identical blocks in the file
 	data := make([]byte, volumeSize)
-	blockSize := backupstore.DEFAULT_BLOCK_SIZE
-	for i := 0; i < blockSize; i++ {
+	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
+
+	for i := int64(0); i < blockSize; i++ {
 		data[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
-	for i := 1; i < volumeContentSize/blockSize; i++ {
-		for j := 0; j < blockSize; j++ {
+	for i := int64(1); i < volumeContentSize/blockSize; i++ {
+		for j := int64(0); j < blockSize; j++ {
 			data[i*blockSize+j] = data[j]
 		}
 	}
@@ -186,7 +187,7 @@ func (s *TestSuite) SetUpSuite(c *C) {
 		err = ioutil.WriteFile(snapName, data, 0600)
 		c.Assert(err, IsNil)
 
-		s.randomChange(data, int64(i*blockSize), 10)
+		s.randomChange(data, int64(i)*blockSize, 10)
 	}
 }
 
@@ -200,8 +201,12 @@ func (s *TestSuite) getDestURL() string {
 }
 
 func (s *TestSuite) TestBackupBasic(c *C) {
+	backup0 := ""
 	for i := 0; i < snapshotCounts; i++ {
 		backup, err := backupstore.CreateDeltaBlockBackup(&s.Volume.v, &s.Volume.Snapshots[i], s.getDestURL(), &s.Volume)
+		if i == 0 {
+			backup0 = backup
+		}
 		c.Assert(err, IsNil)
 
 		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
@@ -211,17 +216,40 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		err = exec.Command("diff", s.Volume.Snapshots[i].Name, restore).Run()
 		c.Assert(err, IsNil)
 
-		backupInfo, err := backupstore.GetBackupInfo(backup)
+		backupInfo, err := backupstore.InspectBackup(backup)
 		c.Assert(err, IsNil)
 
-		c.Assert(backupInfo["BackupURL"], Equals, backup)
-		c.Assert(backupInfo["DriverName"], Equals, driverName)
-		c.Assert(backupInfo["VolumeName"], Equals, volumeName)
-		c.Assert(backupInfo["VolumeSize"], Equals, strconv.Itoa(volumeSize))
-		c.Assert(backupInfo["VolumeCreatedAt"], Equals, s.Volume.v.CreatedTime)
-		c.Assert(backupInfo["SnapshotName"], Equals, s.Volume.Snapshots[i].Name)
-		c.Assert(backupInfo["SnapshotCreatedAt"], Equals, s.Volume.Snapshots[i].CreatedTime)
-		c.Assert(backupInfo["CreatedTime"], Not(Equals), "")
-		c.Assert(backupInfo["Size"], Equals, strconv.Itoa(volumeContentSize))
+		c.Assert(backupInfo.URL, Equals, backup)
+		c.Assert(backupInfo.SnapshotName, Equals, s.Volume.Snapshots[i].Name)
+		c.Assert(backupInfo.SnapshotCreated, Equals, s.Volume.Snapshots[i].CreatedTime)
+		c.Assert(backupInfo.Created, Not(Equals), "")
+		c.Assert(backupInfo.Size, Equals, volumeContentSize)
+		c.Assert(backupInfo.VolumeDriver, Equals, driverName)
+		c.Assert(backupInfo.VolumeName, Equals, volumeName)
+		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
+		c.Assert(backupInfo.VolumeCreated, Equals, s.Volume.v.CreatedTime)
 	}
+
+	listInfo, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), driverName)
+	c.Assert(err, IsNil)
+	c.Assert(len(listInfo), Equals, 1)
+	volumeInfo, ok := listInfo[s.Volume.v.Name]
+	c.Assert(ok, Equals, true)
+	c.Assert(volumeInfo.Name, Equals, s.Volume.v.Name)
+	c.Assert(volumeInfo.Driver, Equals, driverName)
+	c.Assert(volumeInfo.Size, Equals, volumeSize)
+	c.Assert(volumeInfo.Created, Equals, s.Volume.v.CreatedTime)
+	c.Assert(len(volumeInfo.Backups), Equals, snapshotCounts)
+
+	backupInfo0, ok := volumeInfo.Backups[backup0]
+	c.Assert(backupInfo0.URL, Equals, backup0)
+	c.Assert(backupInfo0.SnapshotName, Equals, s.Volume.Snapshots[0].Name)
+	c.Assert(backupInfo0.SnapshotCreated, Equals, s.Volume.Snapshots[0].CreatedTime)
+	c.Assert(backupInfo0.Created, Not(Equals), "")
+	c.Assert(backupInfo0.Size, Equals, volumeContentSize)
+	//Because it's in volume list so volume specific details are omitted
+	c.Assert(backupInfo0.VolumeDriver, Equals, "")
+	c.Assert(backupInfo0.VolumeName, Equals, "")
+	c.Assert(backupInfo0.VolumeSize, Equals, int64(0))
+	c.Assert(backupInfo0.VolumeCreated, Equals, "")
 }
