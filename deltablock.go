@@ -159,6 +159,7 @@ func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, 
 			}
 			log.Debugf("Created new block file at %v", blkFile)
 
+			volume.BlockCount++
 			blockMapping := BlockMapping{
 				Offset:        offset,
 				BlockChecksum: checksum,
@@ -390,6 +391,11 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 
 	log.Debug("GC completed")
 	log.Debug("Removed backupstore backup ", backupName)
+
+	v.BlockCount -= int64(len(discardBlockSet))
+	if err := saveVolume(v, bsDriver); err != nil {
+		return err
+	}
 
 	return nil
 }
