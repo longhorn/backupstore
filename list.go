@@ -8,7 +8,6 @@ import (
 
 type VolumeInfo struct {
 	Name           string
-	Driver         string
 	Size           int64 `json:",string"`
 	Created        string
 	LastBackupName string
@@ -26,12 +25,11 @@ type BackupInfo struct {
 	Size            int64 `json:",string"`
 
 	VolumeName    string `json:",omitempty"`
-	VolumeDriver  string `json:",omitempty"`
 	VolumeSize    int64  `json:",string,omitempty"`
 	VolumeCreated string `json:",omitempty"`
 }
 
-func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverName string, volumeOnly bool) (*VolumeInfo, error) {
+func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool) (*VolumeInfo, error) {
 	if volumeName == "" {
 		return nil, fmt.Errorf("Invalid empty volume Name")
 	}
@@ -48,10 +46,6 @@ func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverNam
 	volume, err := loadVolume(volumeName, driver)
 	if err != nil {
 		return nil, err
-	}
-	//Skip any volumes not owned by specified storage driver
-	if volume.Driver != storageDriverName {
-		return nil, fmt.Errorf("Incompatiable driver: %v with %v", volume.Driver, storageDriverName)
 	}
 
 	volumeInfo := fillVolumeInfo(volume)
@@ -70,14 +64,14 @@ func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverNam
 	return volumeInfo, nil
 }
 
-func List(volumeName, destURL, storageDriverName string, volumeOnly bool) (map[string]*VolumeInfo, error) {
+func List(volumeName, destURL string, volumeOnly bool) (map[string]*VolumeInfo, error) {
 	driver, err := GetBackupStoreDriver(destURL)
 	if err != nil {
 		return nil, err
 	}
 	resp := make(map[string]*VolumeInfo)
 	if volumeName != "" {
-		volumeInfo, err := addListVolume(volumeName, driver, storageDriverName, volumeOnly)
+		volumeInfo, err := addListVolume(volumeName, driver, volumeOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +82,7 @@ func List(volumeName, destURL, storageDriverName string, volumeOnly bool) (map[s
 			return nil, err
 		}
 		for _, volumeName := range volumeNames {
-			volumeInfo, err := addListVolume(volumeName, driver, storageDriverName, volumeOnly)
+			volumeInfo, err := addListVolume(volumeName, driver, volumeOnly)
 			if err != nil {
 				return nil, err
 			}
@@ -101,7 +95,6 @@ func List(volumeName, destURL, storageDriverName string, volumeOnly bool) (map[s
 func fillVolumeInfo(volume *Volume) *VolumeInfo {
 	return &VolumeInfo{
 		Name:           volume.Name,
-		Driver:         volume.Driver,
 		Size:           volume.Size,
 		Created:        volume.CreatedTime,
 		LastBackupName: volume.LastBackupName,
@@ -124,7 +117,6 @@ func fillBackupInfo(backup *Backup, destURL string) *BackupInfo {
 func fillFullBackupInfo(backup *Backup, volume *Volume, destURL string) *BackupInfo {
 	info := fillBackupInfo(backup, destURL)
 	info.VolumeName = volume.Name
-	info.VolumeDriver = volume.Driver
 	info.VolumeSize = volume.Size
 	info.VolumeCreated = volume.CreatedTime
 	return info

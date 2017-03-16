@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	driverName        = "BackupStoreTest"
 	volumeName        = "BackupStoreTestVolume"
 	volumeContentSize = int64(5 * 2 * 1024 * 1024)       // snapshotCounts number of blocks
 	volumeSize        = int64((5 + 4) * 2 * 1024 * 1024) // snapshotCounts number of blocks + intented empty block
@@ -170,7 +169,6 @@ func (s *TestSuite) SetUpSuite(c *C) {
 	s.Volume = RawFileVolume{
 		v: backupstore.Volume{
 			Name:        volumeName,
-			Driver:      driverName,
 			Size:        volumeSize,
 			CreatedTime: util.Now(),
 		},
@@ -224,19 +222,17 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		c.Assert(backupInfo.SnapshotCreated, Equals, s.Volume.Snapshots[i].CreatedTime)
 		c.Assert(backupInfo.Created, Not(Equals), "")
 		c.Assert(backupInfo.Size, Equals, volumeContentSize)
-		c.Assert(backupInfo.VolumeDriver, Equals, driverName)
 		c.Assert(backupInfo.VolumeName, Equals, volumeName)
 		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
 		c.Assert(backupInfo.VolumeCreated, Equals, s.Volume.v.CreatedTime)
 	}
 
-	listInfo, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), driverName, false)
+	listInfo, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), false)
 	c.Assert(err, IsNil)
 	c.Assert(len(listInfo), Equals, 1)
 	volumeInfo, ok := listInfo[s.Volume.v.Name]
 	c.Assert(ok, Equals, true)
 	c.Assert(volumeInfo.Name, Equals, s.Volume.v.Name)
-	c.Assert(volumeInfo.Driver, Equals, driverName)
 	c.Assert(volumeInfo.Size, Equals, volumeSize)
 	c.Assert(volumeInfo.Created, Equals, s.Volume.v.CreatedTime)
 	c.Assert(volumeInfo.SpaceUsage, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
@@ -249,18 +245,16 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(backupInfo0.Created, Not(Equals), "")
 	c.Assert(backupInfo0.Size, Equals, volumeContentSize)
 	//Because it's in volume list so volume specific details are omitted
-	c.Assert(backupInfo0.VolumeDriver, Equals, "")
 	c.Assert(backupInfo0.VolumeName, Equals, "")
 	c.Assert(backupInfo0.VolumeSize, Equals, int64(0))
 	c.Assert(backupInfo0.VolumeCreated, Equals, "")
 
-	volumeList, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), driverName, true)
+	volumeList, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), true)
 	c.Assert(err, IsNil)
 	c.Assert(len(volumeList), Equals, 1)
 	volumeInfo, ok = volumeList[s.Volume.v.Name]
 	c.Assert(ok, Equals, true)
 	c.Assert(volumeInfo.Name, Equals, s.Volume.v.Name)
-	c.Assert(volumeInfo.Driver, Equals, driverName)
 	c.Assert(volumeInfo.Size, Equals, volumeSize)
 	c.Assert(volumeInfo.Created, Equals, s.Volume.v.CreatedTime)
 	c.Assert(len(volumeInfo.Backups), Equals, 0)
