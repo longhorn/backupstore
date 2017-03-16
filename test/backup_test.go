@@ -230,7 +230,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		c.Assert(backupInfo.VolumeCreated, Equals, s.Volume.v.CreatedTime)
 	}
 
-	listInfo, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), driverName)
+	listInfo, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), driverName, false)
 	c.Assert(err, IsNil)
 	c.Assert(len(listInfo), Equals, 1)
 	volumeInfo, ok := listInfo[s.Volume.v.Name]
@@ -252,4 +252,15 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(backupInfo0.VolumeName, Equals, "")
 	c.Assert(backupInfo0.VolumeSize, Equals, int64(0))
 	c.Assert(backupInfo0.VolumeCreated, Equals, "")
+
+	volumeList, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), driverName, true)
+	c.Assert(err, IsNil)
+	c.Assert(len(volumeList), Equals, 1)
+	volumeInfo, ok = volumeList[s.Volume.v.Name]
+	c.Assert(ok, Equals, true)
+	c.Assert(volumeInfo.Name, Equals, s.Volume.v.Name)
+	c.Assert(volumeInfo.Driver, Equals, driverName)
+	c.Assert(volumeInfo.Size, Equals, volumeSize)
+	c.Assert(volumeInfo.Created, Equals, s.Volume.v.CreatedTime)
+	c.Assert(len(volumeInfo.Backups), Equals, 0)
 }

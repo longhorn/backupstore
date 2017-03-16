@@ -29,7 +29,7 @@ type BackupInfo struct {
 	VolumeCreated string `json:",omitempty"`
 }
 
-func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverName string) (*VolumeInfo, error) {
+func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverName string, volumeOnly bool) (*VolumeInfo, error) {
 	if volumeName == "" {
 		return nil, fmt.Errorf("Invalid empty volume Name")
 	}
@@ -53,6 +53,10 @@ func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverNam
 	}
 
 	volumeInfo := fillVolumeInfo(volume)
+	if volumeOnly {
+		return volumeInfo, nil
+	}
+
 	for _, backupName := range backupNames {
 		backup, err := loadBackup(backupName, volumeName, driver)
 		if err != nil {
@@ -64,14 +68,14 @@ func addListVolume(volumeName string, driver BackupStoreDriver, storageDriverNam
 	return volumeInfo, nil
 }
 
-func List(volumeName, destURL, storageDriverName string) (map[string]*VolumeInfo, error) {
+func List(volumeName, destURL, storageDriverName string, volumeOnly bool) (map[string]*VolumeInfo, error) {
 	driver, err := GetBackupStoreDriver(destURL)
 	if err != nil {
 		return nil, err
 	}
 	resp := make(map[string]*VolumeInfo)
 	if volumeName != "" {
-		volumeInfo, err := addListVolume(volumeName, driver, storageDriverName)
+		volumeInfo, err := addListVolume(volumeName, driver, storageDriverName, volumeOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +86,7 @@ func List(volumeName, destURL, storageDriverName string) (map[string]*VolumeInfo
 			return nil, err
 		}
 		for _, volumeName := range volumeNames {
-			volumeInfo, err := addListVolume(volumeName, driver, storageDriverName)
+			volumeInfo, err := addListVolume(volumeName, driver, storageDriverName, volumeOnly)
 			if err != nil {
 				return nil, err
 			}
