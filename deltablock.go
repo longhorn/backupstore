@@ -123,6 +123,7 @@ func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, 
 		Blocks:       []BlockMapping{},
 	}
 	mCounts := len(delta.Mappings)
+	newBlocks := int64(0)
 	for m, d := range delta.Mappings {
 		if d.Size%delta.BlockSize != 0 {
 			return "", fmt.Errorf("Mapping's size %v is not multiples of backup block size %v",
@@ -159,7 +160,7 @@ func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, 
 			}
 			log.Debugf("Created new block file at %v", blkFile)
 
-			volume.BlockCount++
+			newBlocks++
 			blockMapping := BlockMapping{
 				Offset:        offset,
 				BlockChecksum: checksum,
@@ -185,7 +186,14 @@ func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, 
 		return "", err
 	}
 
+	volume, err = loadVolume(volume.Name, bsDriver)
+	if err != nil {
+		return "", err
+	}
+
 	volume.LastBackupName = backup.Name
+	volume.BlockCount = volume.BlockCount + newBlocks
+
 	if err := saveVolume(volume, bsDriver); err != nil {
 		return "", err
 	}
@@ -392,7 +400,13 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 	log.Debug("GC completed")
 	log.Debug("Removed backupstore backup ", backupName)
 
+	v, err = loadVolume(volumeName, bsDriver)
+	if err != nil {
+		return err
+	}
+
 	v.BlockCount -= int64(len(discardBlockSet))
+
 	if err := saveVolume(v, bsDriver); err != nil {
 		return err
 	}
