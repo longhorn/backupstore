@@ -7,13 +7,13 @@ import (
 	"github.com/yasker/backupstore/util"
 )
 
-var (
-	BackupRemoveCmd = cli.Command{
+func BackupRemoveCmd() cli.Command {
+	return cli.Command{
 		Name:   "rm",
 		Usage:  "remove a backup in objectstore: rm <backup>",
 		Action: cmdBackupRemove,
 	}
-)
+}
 
 func cmdBackupRemove(c *cli.Context) {
 	if err := doBackupRemove(c); err != nil {
