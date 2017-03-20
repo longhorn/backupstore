@@ -9,9 +9,10 @@ import (
 
 func BackupRemoveCmd() cli.Command {
 	return cli.Command{
-		Name:   "rm",
-		Usage:  "remove a backup in objectstore: rm <backup>",
-		Action: cmdBackupRemove,
+		Name:    "remove",
+		Aliases: []string{"rm", "delete"},
+		Usage:   "remove a backup in objectstore: rm <backup>",
+		Action:  cmdBackupRemove,
 	}
 }
 

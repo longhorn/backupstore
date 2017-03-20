@@ -15,8 +15,9 @@ import (
 
 func BackupListCmd() cli.Command {
 	return cli.Command{
-		Name:  "list",
-		Usage: "list backups in backupstore: list <dest>",
+		Name:    "list",
+		Aliases: []string{"ls"},
+		Usage:   "list backups in backupstore: list <dest>",
 		Flags: []cli.Flag{
 			cli.StringFlag{
 				Name:  "volume",
