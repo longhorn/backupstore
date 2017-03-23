@@ -17,7 +17,7 @@ var (
 	log = logrus.WithFields(logrus.Fields{"pkg": "vfs"})
 )
 
-type VfsBackupStoreDriver struct {
+type BackupStoreDriver struct {
 	destURL string
 	path    string
 }
@@ -25,9 +25,9 @@ type VfsBackupStoreDriver struct {
 const (
 	KIND = "vfs"
 
-	VFS_PATH = "vfs.path"
+	VfsPath = "vfs.path"
 
-	MAX_CLEANUP_LEVEL = 10
+	MaxCleanupLevel = 10
 )
 
 func init() {
@@ -37,7 +37,7 @@ func init() {
 }
 
 func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
-	b := &VfsBackupStoreDriver{}
+	b := &BackupStoreDriver{}
 	u, err := url.Parse(destURL)
 	if err != nil {
 		return nil, err
@@ -65,26 +65,26 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	return b, nil
 }
 
-func (v *VfsBackupStoreDriver) updatePath(path string) string {
+func (v *BackupStoreDriver) updatePath(path string) string {
 	return filepath.Join(v.path, path)
 }
 
-func (v *VfsBackupStoreDriver) preparePath(file string) error {
+func (v *BackupStoreDriver) preparePath(file string) error {
 	if err := os.MkdirAll(filepath.Dir(v.updatePath(file)), os.ModeDir|0700); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (v *VfsBackupStoreDriver) Kind() string {
+func (v *BackupStoreDriver) Kind() string {
 	return KIND
 }
 
-func (v *VfsBackupStoreDriver) GetURL() string {
+func (v *BackupStoreDriver) GetURL() string {
 	return v.destURL
 }
 
-func (v *VfsBackupStoreDriver) FileSize(filePath string) int64 {
+func (v *BackupStoreDriver) FileSize(filePath string) int64 {
 	file := v.updatePath(filePath)
 	st, err := os.Stat(file)
 	if err != nil || st.IsDir() {
@@ -93,18 +93,18 @@ func (v *VfsBackupStoreDriver) FileSize(filePath string) int64 {
 	return st.Size()
 }
 
-func (v *VfsBackupStoreDriver) FileExists(filePath string) bool {
+func (v *BackupStoreDriver) FileExists(filePath string) bool {
 	return v.FileSize(filePath) >= 0
 }
 
-func (v *VfsBackupStoreDriver) Remove(names ...string) error {
+func (v *BackupStoreDriver) Remove(names ...string) error {
 	for _, name := range names {
 		if err := os.RemoveAll(v.updatePath(name)); err != nil {
 			return err
 		}
 		//Also automatically cleanup upper level directories
 		dir := v.updatePath(name)
-		for i := 0; i < MAX_CLEANUP_LEVEL; i++ {
+		for i := 0; i < MaxCleanupLevel; i++ {
 			dir = filepath.Dir(dir)
 			// Don't clean above backupstore base
 			if strings.HasSuffix(dir, backupstore.GetBackupstoreBase()) {
@@ -119,7 +119,7 @@ func (v *VfsBackupStoreDriver) Remove(names ...string) error {
 	return nil
 }
 
-func (v *VfsBackupStoreDriver) Read(src string) (io.ReadCloser, error) {
+func (v *BackupStoreDriver) Read(src string) (io.ReadCloser, error) {
 	file, err := os.Open(v.updatePath(src))
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (v *VfsBackupStoreDriver) Read(src string) (io.ReadCloser, error) {
 	return file, nil
 }
 
-func (v *VfsBackupStoreDriver) Write(dst string, rs io.ReadSeeker) error {
+func (v *BackupStoreDriver) Write(dst string, rs io.ReadSeeker) error {
 	tmpFile := dst + ".tmp"
 	if v.FileExists(tmpFile) {
 		v.Remove(tmpFile)
@@ -151,7 +151,7 @@ func (v *VfsBackupStoreDriver) Write(dst string, rs io.ReadSeeker) error {
 	return os.Rename(v.updatePath(tmpFile), v.updatePath(dst))
 }
 
-func (v *VfsBackupStoreDriver) List(path string) ([]string, error) {
+func (v *BackupStoreDriver) List(path string) ([]string, error) {
 	out, err := util.Execute("ls", []string{"-1", v.updatePath(path)})
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (v *VfsBackupStoreDriver) List(path string) ([]string, error) {
 	return result, nil
 }
 
-func (v *VfsBackupStoreDriver) Upload(src, dst string) error {
+func (v *BackupStoreDriver) Upload(src, dst string) error {
 	tmpDst := dst + ".tmp"
 	if v.FileExists(tmpDst) {
 		v.Remove(tmpDst)
@@ -183,7 +183,7 @@ func (v *VfsBackupStoreDriver) Upload(src, dst string) error {
 	return nil
 }
 
-func (v *VfsBackupStoreDriver) Download(src, dst string) error {
+func (v *BackupStoreDriver) Download(src, dst string) error {
 	_, err := util.Execute("cp", []string{v.updatePath(src), dst})
 	if err != nil {
 		return err

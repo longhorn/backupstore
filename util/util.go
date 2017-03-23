@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	PRESERVED_CHECKSUM_LENGTH = 64
+	PreservedChecksumLength = 64
 )
 
 var (
-	cmdTimeout time.Duration = time.Minute // one minute by default
+	cmdTimeout = time.Minute // one minute by default
 )
 
 func GenerateName(prefix string) string {
@@ -36,7 +36,7 @@ func NewUUID() string {
 
 func GetChecksum(data []byte) string {
 	checksumBytes := sha512.Sum512(data)
-	checksum := hex.EncodeToString(checksumBytes[:])[:PRESERVED_CHECKSUM_LENGTH]
+	checksum := hex.EncodeToString(checksumBytes[:])[:PreservedChecksumLength]
 	return checksum
 }
 
@@ -61,7 +61,7 @@ func DecompressAndVerify(src io.Reader, checksum string) (io.Reader, error) {
 		return nil, err
 	}
 	if GetChecksum(block) != checksum {
-		return nil, fmt.Errorf("Checksum verification failed for block!")
+		return nil, fmt.Errorf("checksum verification failed for block")
 	}
 	return bytes.NewReader(block), nil
 }
