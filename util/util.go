@@ -126,3 +126,17 @@ func UnescapeURL(url string) string {
 	result = strings.Replace(result, "u0026", "&", 1)
 	return result
 }
+
+func IsMounted(mountPoint string) bool {
+	output, err := Execute("mount", []string{})
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, mountPoint) {
+			return true
+		}
+	}
+	return false
+}
