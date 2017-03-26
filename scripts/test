@@ -1,10 +1,21 @@
 #!/bin/bash
 set -e
 
+function cleanup {
+        echo Stopping NFS server
+        docker rm -vf nfs_test_server
+}
+trap cleanup EXIT
+
 cd $(dirname $0)/..
+
+echo Starting NFS server
+
+docker run -d --name nfs_test_server --net container:$(hostname) --privileged docker.io/erezhorev/dockerized_nfs_server /opt/backupstore
 
 echo Running tests
 
 PACKAGES="$(find -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
 
 go test -race -cover ${PACKAGES}
+

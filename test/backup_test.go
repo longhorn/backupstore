@@ -14,8 +14,8 @@ import (
 
 	//"github.com/Sirupsen/logrus"
 	"github.com/yasker/backupstore"
+	_ "github.com/yasker/backupstore/nfs"
 	"github.com/yasker/backupstore/util"
-	_ "github.com/yasker/backupstore/vfs"
 	. "gopkg.in/check.v1"
 )
 
@@ -55,7 +55,8 @@ type RawFileVolume struct {
 }
 
 func (r *RawFileVolume) HasSnapshot(id, volumeID string) bool {
-	return true
+	_, ok := os.Stat(id)
+	return ok == nil
 }
 
 func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backupstore.Mappings, error) {
@@ -195,7 +196,8 @@ func (s *TestSuite) TearDownSuite(c *C) {
 }
 
 func (s *TestSuite) getDestURL() string {
-	return "vfs://" + s.BackupStorePath
+	//return "vfs://" + s.BackupStorePath
+	return "nfs://127.0.0.1:/opt/backupstore"
 }
 
 func (s *TestSuite) TestBackupBasic(c *C) {
