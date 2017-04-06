@@ -12,6 +12,13 @@ import (
 	. "github.com/yasker/backupstore/logging"
 )
 
+type DeltaBackupConfig struct {
+	Volume   *Volume
+	Snapshot *Snapshot
+	DestURL  string
+	DeltaOps DeltaBlockBackupOperations
+}
+
 type BlockMapping struct {
 	Offset        int64
 	BlockChecksum string
@@ -33,7 +40,15 @@ const (
 	BLOCK_SEPARATE_LAYER2 = 4
 )
 
-func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, deltaOps DeltaBlockBackupOperations) (string, error) {
+func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
+	if config == nil {
+		return "", fmt.Errorf("Invalid empty config for backup")
+	}
+
+	volume := config.Volume
+	snapshot := config.Snapshot
+	destURL := config.DestURL
+	deltaOps := config.DeltaOps
 	if deltaOps == nil {
 		return "", fmt.Errorf("Missing DeltaBlockBackupOperations")
 	}
@@ -87,10 +102,10 @@ func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, 
 	}
 
 	log.WithFields(logrus.Fields{
-		LogFieldReason:        LogReasonStart,
-		LogFieldObject:        LogObjectSnapshot,
-		LogFieldEvent:         LogEventCompare,
-		LogFieldSnapshot:      snapshot.Name,
+		LogFieldReason:       LogReasonStart,
+		LogFieldObject:       LogObjectSnapshot,
+		LogFieldEvent:        LogEventCompare,
+		LogFieldSnapshot:     snapshot.Name,
 		LogFieldLastSnapshot: lastSnapshotName,
 	}).Debug("Generating snapshot changed blocks metadata")
 
@@ -102,10 +117,10 @@ func CreateDeltaBlockBackup(volume *Volume, snapshot *Snapshot, destURL string, 
 		return "", fmt.Errorf("Currently doesn't support different block sizes driver other than %v", DEFAULT_BLOCK_SIZE)
 	}
 	log.WithFields(logrus.Fields{
-		LogFieldReason:        LogReasonComplete,
-		LogFieldObject:        LogObjectSnapshot,
-		LogFieldEvent:         LogEventCompare,
-		LogFieldSnapshot:      snapshot.Name,
+		LogFieldReason:       LogReasonComplete,
+		LogFieldObject:       LogObjectSnapshot,
+		LogFieldEvent:        LogEventCompare,
+		LogFieldSnapshot:     snapshot.Name,
 		LogFieldLastSnapshot: lastSnapshotName,
 	}).Debug("Generated snapshot changed blocks metadata")
 
@@ -252,7 +267,7 @@ func RestoreDeltaBlockBackup(backupURL, volDevName string) error {
 	vol, err := loadVolume(srcVolumeName, bsDriver)
 	if err != nil {
 		return generateError(logrus.Fields{
-			LogFieldVolume:     srcVolumeName,
+			LogFieldVolume:    srcVolumeName,
 			LogEventBackupURL: backupURL,
 		}, "Volume doesn't exist in backupstore: %v", err)
 	}
@@ -278,10 +293,10 @@ func RestoreDeltaBlockBackup(backupURL, volDevName string) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		LogFieldReason:      LogReasonStart,
-		LogFieldEvent:       LogEventRestore,
-		LogFieldObject:      LogFieldSnapshot,
-		LogFieldSnapshot:    srcBackupName,
+		LogFieldReason:     LogReasonStart,
+		LogFieldEvent:      LogEventRestore,
+		LogFieldObject:     LogFieldSnapshot,
+		LogFieldSnapshot:   srcBackupName,
 		LogFieldOrigVolume: srcVolumeName,
 		LogFieldVolumeDev:  volDevName,
 		LogEventBackupURL:  backupURL,

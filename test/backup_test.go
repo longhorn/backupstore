@@ -203,7 +203,13 @@ func (s *TestSuite) getDestURL() string {
 func (s *TestSuite) TestBackupBasic(c *C) {
 	backup0 := ""
 	for i := 0; i < snapshotCounts; i++ {
-		backup, err := backupstore.CreateDeltaBlockBackup(&s.Volume.v, &s.Volume.Snapshots[i], s.getDestURL(), &s.Volume)
+		config := &backupstore.DeltaBackupConfig{
+			Volume:   &s.Volume.v,
+			Snapshot: &s.Volume.Snapshots[i],
+			DestURL:  s.getDestURL(),
+			DeltaOps: &s.Volume,
+		}
+		backup, err := backupstore.CreateDeltaBlockBackup(config)
 		if i == 0 {
 			backup0 = backup
 		}
