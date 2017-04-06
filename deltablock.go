@@ -17,6 +17,7 @@ type DeltaBackupConfig struct {
 	Snapshot *Snapshot
 	DestURL  string
 	DeltaOps DeltaBlockBackupOperations
+	Labels   map[string]string
 }
 
 type BlockMapping struct {
@@ -196,6 +197,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 	backup.SnapshotCreatedAt = snapshot.CreatedTime
 	backup.CreatedTime = util.Now()
 	backup.Size = int64(len(backup.Blocks)) * DEFAULT_BLOCK_SIZE
+	backup.Labels = config.Labels
 
 	if err := saveBackup(backup, bsDriver); err != nil {
 		return "", err

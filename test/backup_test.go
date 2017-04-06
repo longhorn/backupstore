@@ -208,6 +208,10 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 			Snapshot: &s.Volume.Snapshots[i],
 			DestURL:  s.getDestURL(),
 			DeltaOps: &s.Volume,
+			Labels: map[string]string{
+				"SnapshotName": s.Volume.Snapshots[i].Name,
+				"RandomKey":    "RandomValue",
+			},
 		}
 		backup, err := backupstore.CreateDeltaBlockBackup(config)
 		if i == 0 {
@@ -233,6 +237,8 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		c.Assert(backupInfo.VolumeName, Equals, volumeName)
 		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
 		c.Assert(backupInfo.VolumeCreated, Equals, s.Volume.v.CreatedTime)
+		c.Assert(backupInfo.Labels["SnapshotName"], Equals, s.Volume.Snapshots[i].Name)
+		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
 	}
 
 	listInfo, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), false)
@@ -256,6 +262,8 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(backupInfo0.VolumeName, Equals, "")
 	c.Assert(backupInfo0.VolumeSize, Equals, int64(0))
 	c.Assert(backupInfo0.VolumeCreated, Equals, "")
+	c.Assert(backupInfo0.Labels["SnapshotName"], Equals, s.Volume.Snapshots[0].Name)
+	c.Assert(backupInfo0.Labels["RandomKey"], Equals, "RandomValue")
 
 	volumeList, err := backupstore.List(s.Volume.v.Name, s.getDestURL(), true)
 	c.Assert(err, IsNil)
