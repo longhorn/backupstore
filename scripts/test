@@ -16,6 +16,8 @@ echo Starting NFS server
 
 docker run -d --name $NFS_SERVER --net container:$(hostname) --privileged docker.io/erezhorev/dockerized_nfs_server $NFS_PATH
 
+echo Wait for NFS server\'s 90 seconds grace period to pass
+sleep 90
 echo Running tests
 
 PACKAGES="$(find -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
