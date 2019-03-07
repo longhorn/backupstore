@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	. "gopkg.in/check.v1"
 )

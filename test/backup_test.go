@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	//"github.com/Sirupsen/logrus"
+	//"github.com/sirupsen/logrus"
 	"github.com/rancher/backupstore"
 	_ "github.com/rancher/backupstore/nfs"
 	"github.com/rancher/backupstore/util"
