@@ -12,9 +12,9 @@ type VolumeInfo struct {
 	Created        string
 	LastBackupName string
 	LastBackupAt   string
-	SpaceUsage     int64 `json:",string"`
+	DataStored     int64 `json:",string"`
 
-	Messages       map[MessageType]string
+	Messages map[MessageType]string
 
 	Backups map[string]*BackupInfo `json:",omitempty"`
 }
@@ -50,9 +50,9 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 	volume, err := loadVolume(volumeName, driver)
 	if err != nil {
 		return &VolumeInfo{
-			Name:           volumeName,
-			Messages:       map[MessageType]string {MessageTypeError : err.Error()},
-			Backups:        make(map[string]*BackupInfo),
+			Name:     volumeName,
+			Messages: map[MessageType]string{MessageTypeError: err.Error()},
+			Backups:  make(map[string]*BackupInfo),
 		}, nil
 	}
 
@@ -107,7 +107,7 @@ func fillVolumeInfo(volume *Volume) *VolumeInfo {
 		Created:        volume.CreatedTime,
 		LastBackupName: volume.LastBackupName,
 		LastBackupAt:   volume.LastBackupAt,
-		SpaceUsage:     int64(volume.BlockCount * DEFAULT_BLOCK_SIZE),
+		DataStored:     int64(volume.BlockCount * DEFAULT_BLOCK_SIZE),
 		Messages:       make(map[MessageType]string),
 		Backups:        make(map[string]*BackupInfo),
 	}

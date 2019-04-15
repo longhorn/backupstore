@@ -249,7 +249,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(volumeInfo.Name, Equals, s.Volume.v.Name)
 	c.Assert(volumeInfo.Size, Equals, volumeSize)
 	c.Assert(volumeInfo.Created, Equals, s.Volume.v.CreatedTime)
-	c.Assert(volumeInfo.SpaceUsage, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
+	c.Assert(volumeInfo.DataStored, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
 	c.Assert(len(volumeInfo.Backups), Equals, snapshotCounts)
 
 	backupInfo0, ok := volumeInfo.Backups[backup0]
