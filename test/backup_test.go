@@ -77,11 +77,19 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
 
 	if compareID == "" {
+		emptyData := make([]byte, blockSize)
 		for i := int64(0); i < volumeContentSize/blockSize; i++ {
-			mappings.Mappings = append(mappings.Mappings, backupstore.Mapping{
-				Offset: i * blockSize,
-				Size:   blockSize,
-			})
+			offset := i * blockSize
+			data := make([]byte, blockSize)
+			if _, err := snap1.ReadAt(data, offset); err != nil {
+				return nil, err
+			}
+			if !reflect.DeepEqual(data, emptyData) {
+				mappings.Mappings = append(mappings.Mappings, backupstore.Mapping{
+					Offset: offset,
+					Size:   blockSize,
+				})
+			}
 		}
 		return &mappings, nil
 	}
