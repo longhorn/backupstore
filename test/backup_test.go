@@ -52,8 +52,18 @@ type DeltaBlockBackupOperations interface {
 */
 
 type RawFileVolume struct {
-	v         backupstore.Volume
-	Snapshots []backupstore.Snapshot
+	v              backupstore.Volume
+	Snapshots      []backupstore.Snapshot
+	BackupError    string
+	BackupProgress int
+	BackupURL      string
+}
+
+func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, progress int, backupURL string, backupError string) error {
+	r.BackupProgress = progress
+	r.BackupURL = backupURL
+	r.BackupError = backupError
+	return nil
 }
 
 func (r *RawFileVolume) HasSnapshot(id, volumeID string) bool {
@@ -223,11 +233,24 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 				"RandomKey":    "RandomValue",
 			},
 		}
-		backup, err := backupstore.CreateDeltaBlockBackup(config)
+		_, err := backupstore.CreateDeltaBlockBackup(config)
+		c.Assert(err, IsNil)
+
+		retryCount := 120
+		for i < retryCount {
+			if volume.BackupURL != "" {
+				break
+			}
+			if volume.BackupError != "" {
+				c.Assert(volume.BackupError, IsNil)
+			}
+			time.Sleep(1 * time.Second)
+		}
+		backup := volume.BackupURL
+
 		if i == 0 {
 			backup0 = backup
 		}
-		c.Assert(err, IsNil)
 
 		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
 		err = backupstore.RestoreDeltaBlockBackup(backup, restore)
@@ -393,8 +416,20 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 				"RandomKey":    "RandomValue",
 			},
 		}
-		backup, err := backupstore.CreateDeltaBlockBackup(config)
+		_, err := backupstore.CreateDeltaBlockBackup(config)
 		c.Assert(err, IsNil)
+
+		retryCount := 120
+		for i < retryCount {
+			if volume.BackupURL != "" {
+				break
+			}
+			if volume.BackupError != "" {
+				c.Assert(volume.BackupError, IsNil)
+			}
+			time.Sleep(1 * time.Second)
+		}
+		backup := volume.BackupURL
 
 		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
 		err = backupstore.RestoreDeltaBlockBackup(backup, restore)
