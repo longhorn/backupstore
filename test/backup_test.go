@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,8 +53,36 @@ type DeltaBlockBackupOperations interface {
 */
 
 type RawFileVolume struct {
-	v         backupstore.Volume
-	Snapshots []backupstore.Snapshot
+	lock           sync.Mutex
+	v              backupstore.Volume
+	Snapshots      []backupstore.Snapshot
+	BackupProgress int
+	BackupError    string
+	BackupURL      string
+}
+
+func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, backupProgress int, backupURL string, backupError string) error {
+	r.lock.Lock()
+	r.BackupProgress = backupProgress
+	r.BackupURL = backupURL
+	r.BackupError = backupError
+	r.lock.Unlock()
+	return nil
+}
+
+func (r *RawFileVolume) GetBackupStatus() (string, string) {
+	r.lock.Lock()
+	bUrl := r.BackupURL
+	bErr := r.BackupError
+	r.lock.Unlock()
+	return bUrl, bErr
+}
+
+func (r *RawFileVolume) ResetBackupStatus() {
+	r.lock.Lock()
+	r.BackupURL = ""
+	r.BackupError = ""
+	r.lock.Unlock()
 }
 
 func (r *RawFileVolume) HasSnapshot(id, volumeID string) bool {
@@ -175,6 +204,28 @@ func (s *TestSuite) getDestURL() string {
 	return "nfs://127.0.0.1:/opt/backupstore"
 }
 
+func (s *TestSuite) createAndWaitForBackup(c *C, config *backupstore.DeltaBackupConfig, deltaOps *RawFileVolume) string {
+	_, err := backupstore.CreateDeltaBlockBackup(config)
+	c.Assert(err, IsNil)
+
+	retryCount := 120
+	var bError, bURL string
+	for j := 0; j < retryCount; j++ {
+
+		bURL, bError = deltaOps.GetBackupStatus()
+		c.Assert(bError, Equals, "")
+		if bURL != "" {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	c.Assert(bURL, Not(Equals), "")
+	deltaOps.ResetBackupStatus()
+
+	return bURL
+}
+
 func (s *TestSuite) TestBackupBasic(c *C) {
 	// Make identical blocks in the file
 	data := make([]byte, volumeSize)
@@ -223,14 +274,13 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 				"RandomKey":    "RandomValue",
 			},
 		}
-		backup, err := backupstore.CreateDeltaBlockBackup(config)
+		backup := s.createAndWaitForBackup(c, config, &volume)
 		if i == 0 {
 			backup0 = backup
 		}
-		c.Assert(err, IsNil)
 
 		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
-		err = backupstore.RestoreDeltaBlockBackup(backup, restore)
+		err := backupstore.RestoreDeltaBlockBackup(backup, restore)
 		c.Assert(err, IsNil)
 
 		err = exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
@@ -393,9 +443,7 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 				"RandomKey":    "RandomValue",
 			},
 		}
-		backup, err := backupstore.CreateDeltaBlockBackup(config)
-		c.Assert(err, IsNil)
-
+		backup := s.createAndWaitForBackup(c, config, &volume)
 		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
 		err = backupstore.RestoreDeltaBlockBackup(backup, restore)
 		c.Assert(err, IsNil)
