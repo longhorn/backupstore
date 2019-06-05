@@ -115,7 +115,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 		return "", err
 	}
 	if delta.BlockSize != DEFAULT_BLOCK_SIZE {
-		return "", fmt.Errorf("Currently doesn't support different block sizes driver other than %v", DEFAULT_BLOCK_SIZE)
+		return "", fmt.Errorf("currently doesn't support different block sizes driver other than %v", DEFAULT_BLOCK_SIZE)
 	}
 	log.WithFields(logrus.Fields{
 		LogFieldReason:       LogReasonComplete,
@@ -138,6 +138,18 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 		SnapshotName: snapshot.Name,
 		Blocks:       []BlockMapping{},
 	}
+
+	return performIncrementalBackup(config, delta, deltaBackup, lastBackup, bsDriver)
+}
+
+func performIncrementalBackup(config *DeltaBackupConfig, delta *Mappings, deltaBackup *Backup, lastBackup *Backup,
+	bsDriver BackupStoreDriver) (string, error) {
+
+	volume := config.Volume
+	snapshot := config.Snapshot
+	destURL := config.DestURL
+	deltaOps := config.DeltaOps
+
 	mCounts := len(delta.Mappings)
 	newBlocks := int64(0)
 	for m, d := range delta.Mappings {
@@ -203,7 +215,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 		return "", err
 	}
 
-	volume, err = loadVolume(volume.Name, bsDriver)
+	volume, err := loadVolume(volume.Name, bsDriver)
 	if err != nil {
 		return "", err
 	}
