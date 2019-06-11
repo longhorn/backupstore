@@ -14,9 +14,9 @@ import (
 	"time"
 
 	//"github.com/sirupsen/logrus"
-	"github.com/rancher/backupstore"
-	_ "github.com/rancher/backupstore/nfs"
-	"github.com/rancher/backupstore/util"
+	"github.com/longhorn/backupstore"
+	_ "github.com/longhorn/backupstore/nfs"
+	"github.com/longhorn/backupstore/util"
 	. "gopkg.in/check.v1"
 )
 

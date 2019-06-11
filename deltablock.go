@@ -8,8 +8,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	. "github.com/rancher/backupstore/logging"
-	"github.com/rancher/backupstore/util"
+	. "github.com/longhorn/backupstore/logging"
+	"github.com/longhorn/backupstore/util"
 )
 
 type DeltaBackupConfig struct {
