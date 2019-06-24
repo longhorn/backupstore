@@ -20,6 +20,12 @@ type DeltaBackupConfig struct {
 	Labels   map[string]string
 }
 
+type DeltaRestoreConfig struct {
+	BackupURL      string
+	LastBackupName string
+	Filename       string
+}
+
 type BlockMapping struct {
 	Offset        int64
 	BlockChecksum string
@@ -285,7 +291,14 @@ func mergeSnapshotMap(deltaBackup, lastBackup *Backup) *Backup {
 	return backup
 }
 
-func RestoreDeltaBlockBackup(backupURL, volDevName string) error {
+func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
+	if config == nil {
+		return fmt.Errorf("invalid empty config for restore")
+	}
+
+	volDevName := config.Filename
+	backupURL := config.BackupURL
+
 	bsDriver, err := GetBackupStoreDriver(backupURL)
 	if err != nil {
 		return err
