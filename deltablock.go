@@ -481,7 +481,25 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 		LogEventBackupURL:  backupURL,
 	}).Debugf("Started incrementally restoring from %v to %v", lastBackup, backup)
 
+	if err := performIncrementalRestore(srcVolumeName, volDev, lastBackup, backup, bsDriver, config); err != nil {
+		return err
+	}
+	// We want to truncate regular files, but not device
+	if stat.Mode()&os.ModeType == 0 {
+		log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
+		if err := volDev.Truncate(vol.Size); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func performIncrementalRestore(srcVolumeName string, volDev *os.File, lastBackup *Backup, backup *Backup,
+	bsDriver BackupStoreDriver, config *DeltaRestoreConfig) error {
+
 	emptyBlock := make([]byte, DEFAULT_BLOCK_SIZE)
+
 	for b, l := 0, 0; b < len(backup.Blocks) || l < len(lastBackup.Blocks); {
 		if b >= len(backup.Blocks) {
 			if err := fillBlockToFile(&emptyBlock, volDev, lastBackup.Blocks[l].Offset); err != nil {
@@ -520,15 +538,6 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 			l++
 		}
 	}
-
-	// We want to truncate regular files, but not device
-	if stat.Mode()&os.ModeType == 0 {
-		log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
-		if err := volDev.Truncate(vol.Size); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
