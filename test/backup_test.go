@@ -504,7 +504,14 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		err = exec.Command("diff", restore, volume.Snapshots[i].Name).Run()
 		c.Assert(err, IsNil)
 
-		err = backupstore.RestoreDeltaBlockBackupIncrementally(backup, restoreIncre, lastBackupName)
+		rConfig = &backupstore.DeltaRestoreConfig{
+			BackupURL:      backup,
+			DeltaOps:       &volume,
+			LastBackupName: lastBackupName,
+			Filename:       restoreIncre,
+		}
+
+		err = backupstore.RestoreDeltaBlockBackupIncrementally(rConfig)
 		if i == 0 {
 			c.Assert(err, NotNil)
 			c.Assert(err, ErrorMatches, "Invalid parameter lastBackupName "+lastBackupName)
