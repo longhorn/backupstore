@@ -18,6 +18,7 @@ import (
 	"github.com/longhorn/backupstore"
 	_ "github.com/longhorn/backupstore/nfs"
 	"github.com/longhorn/backupstore/util"
+	//_ "github.com/longhorn/backupstore/vfs"
 	. "gopkg.in/check.v1"
 )
 
@@ -250,10 +251,7 @@ func (s *TestSuite) createAndWaitForBackup(c *C, config *backupstore.DeltaBackup
 	return bURL
 }
 
-func (s *TestSuite) createAndWaitForRestore(c *C, config *backupstore.DeltaRestoreConfig, deltaOps *RawFileVolume) {
-	err := backupstore.RestoreDeltaBlockBackup(config)
-	c.Assert(err, IsNil)
-
+func (s *TestSuite) waitForRestoreCompletion(c *C, deltaOps *RawFileVolume) {
 	var rError error
 	retryCount := 120
 	rProgress := 0
@@ -330,9 +328,11 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 			DeltaOps:  &volume,
 			Filename:  restore,
 		}
-		s.createAndWaitForRestore(c, rConfig, &volume)
+		err := backupstore.RestoreDeltaBlockBackup(rConfig)
+		c.Assert(err, IsNil)
+		s.waitForRestoreCompletion(c, &volume)
 
-		err := exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
+		err = exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
 		c.Assert(err, IsNil)
 
 		backupInfo, err := backupstore.InspectBackup(backup)
@@ -499,7 +499,10 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 			DeltaOps:  &volume,
 			Filename:  restore,
 		}
-		s.createAndWaitForRestore(c, rConfig, &volume)
+
+		err := backupstore.RestoreDeltaBlockBackup(rConfig)
+		c.Assert(err, IsNil)
+		s.waitForRestoreCompletion(c, &volume)
 
 		err = exec.Command("diff", restore, volume.Snapshots[i].Name).Run()
 		c.Assert(err, IsNil)
@@ -514,13 +517,14 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		err = backupstore.RestoreDeltaBlockBackupIncrementally(rConfig)
 		if i == 0 {
 			c.Assert(err, NotNil)
-			c.Assert(err, ErrorMatches, "Invalid parameter lastBackupName "+lastBackupName)
+			c.Assert(err, ErrorMatches, "invalid parameter lastBackupName "+lastBackupName)
 
 			err = os.Rename(restore, restoreIncre)
 			c.Assert(err, IsNil)
 		} else {
 			c.Assert(err, IsNil)
 
+			s.waitForRestoreCompletion(c, &volume)
 			err = exec.Command("diff", restoreIncre, volume.Snapshots[i].Name).Run()
 			c.Assert(err, IsNil)
 		}
