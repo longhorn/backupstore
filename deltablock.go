@@ -432,12 +432,12 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 	}
 
 	if vol.Size == 0 || vol.Size%DEFAULT_BLOCK_SIZE != 0 {
-		return fmt.Errorf("Read invalid volume size %v", vol.Size)
+		return fmt.Errorf("read invalid volume size %v", vol.Size)
 	}
 
 	// check lastBackupName
 	if !util.ValidateName(lastBackupName) {
-		return fmt.Errorf("Invalid parameter lastBackupName %v", lastBackupName)
+		return fmt.Errorf("invalid parameter lastBackupName %v", lastBackupName)
 	}
 
 	// check volDev
@@ -455,7 +455,6 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 		}
 		logrus.Debugf("File %v existed\n", volDevName)
 	}
-	defer volDev.Close()
 
 	stat, err := volDev.Stat()
 	if err != nil {
@@ -480,25 +479,34 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 		LogFieldVolumeDev:  volDevName,
 		LogEventBackupURL:  backupURL,
 	}).Debugf("Started incrementally restoring from %v to %v", lastBackup, backup)
+	go func() {
+		defer volDev.Close()
 
-	if err := performIncrementalRestore(srcVolumeName, volDev, lastBackup, backup, bsDriver, config); err != nil {
-		return err
-	}
-	// We want to truncate regular files, but not device
-	if stat.Mode()&os.ModeType == 0 {
-		log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
-		if err := volDev.Truncate(vol.Size); err != nil {
-			return err
+		if err := performIncrementalRestore(srcVolumeName, volDev, lastBackup, backup, bsDriver, config); err != nil {
+			deltaOps.UpdateRestoreStatus(volDevName, 0, err)
+			return
 		}
-	}
-
+		// We want to truncate regular files, but not device
+		if stat.Mode()&os.ModeType == 0 {
+			log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
+			if err := volDev.Truncate(vol.Size); err != nil {
+				deltaOps.UpdateRestoreStatus(volDevName, 0, err)
+				return
+			}
+		}
+		deltaOps.UpdateRestoreStatus(volDevName, PROGRESS_PERCENTAGE_BACKUP_TOTAL, nil)
+	}()
 	return nil
 }
 
 func performIncrementalRestore(srcVolumeName string, volDev *os.File, lastBackup *Backup, backup *Backup,
 	bsDriver BackupStoreDriver, config *DeltaRestoreConfig) error {
+	var progress int
+	volDevName := config.Filename
+	deltaOps := config.DeltaOps
 
 	emptyBlock := make([]byte, DEFAULT_BLOCK_SIZE)
+	total := len(backup.Blocks) + len(lastBackup.Blocks)
 
 	for b, l := 0, 0; b < len(backup.Blocks) || l < len(lastBackup.Blocks); {
 		if b >= len(backup.Blocks) {
@@ -537,6 +545,8 @@ func performIncrementalRestore(srcVolumeName string, volDev *os.File, lastBackup
 			}
 			l++
 		}
+		progress = int((float64(b+l+2) / float64(total)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
+		deltaOps.UpdateRestoreStatus(volDevName, progress, nil)
 	}
 	return nil
 }
