@@ -401,7 +401,18 @@ func restoreBlockToFile(volumeName string, volDev *os.File, bsDriver BackupStore
 	return nil
 }
 
-func RestoreDeltaBlockBackupIncrementally(backupURL, volDevName, lastBackupName string) error {
+func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
+	if config == nil {
+		return fmt.Errorf("invalid empty config for restore")
+	}
+
+	backupURL := config.BackupURL
+	volDevName := config.Filename
+	lastBackupName := config.LastBackupName
+	deltaOps := config.DeltaOps
+	if deltaOps == nil {
+		return fmt.Errorf("missing DeltaBlockBackupOperations")
+	}
 	bsDriver, err := GetBackupStoreDriver(backupURL)
 	if err != nil {
 		return err
