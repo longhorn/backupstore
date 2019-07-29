@@ -27,6 +27,11 @@ type DeltaRestoreConfig struct {
 	Filename       string
 }
 
+type DeltaBackupDeletionConfig struct {
+	BackupURL string
+	DeltaOps  DeltaBackupDeletionOperations
+}
+
 type BlockMapping struct {
 	Offset        int64
 	BlockChecksum string
@@ -45,6 +50,10 @@ type DeltaRestoreOperations interface {
 	UpdateRestoreStatus(snapshot string, restoreProgress int, err error)
 }
 
+type DeltaBackupDeletionOperations interface {
+	UpdateBackupDeletionStatus(BackupURL string, progress int, err string)
+}
+
 const (
 	DEFAULT_BLOCK_SIZE = 2097152
 
@@ -53,6 +62,7 @@ const (
 	BLOCK_SEPARATE_LAYER2 = 4
 
 	PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT = 95
+	PROGRESS_PERCENTAGE_BACKUP_DELETION = 95
 	PROGRESS_PERCENTAGE_BACKUP_TOTAL    = 100
 )
 
@@ -569,24 +579,39 @@ func DeleteBackupVolume(volumeName string, destURL string) error {
 	return nil
 }
 
-func DeleteDeltaBlockBackup(backupURL string) error {
+func DeleteDeltaBlockBackup(config *DeltaBackupDeletionConfig) error {
+	if config == nil {
+		return fmt.Errorf("invalid empty config for backup deletion")
+	}
+
+	var progress int
+	backupURL := config.BackupURL
+	deltaOps := config.DeltaOps
+	if deltaOps == nil {
+		return fmt.Errorf("missing DeltaBackupDeletionOperations")
+	}
+
 	bsDriver, err := GetBackupStoreDriver(backupURL)
 	if err != nil {
+		deltaOps.UpdateBackupDeletionStatus(backupURL, 0, err.Error())
 		return err
 	}
 
 	backupName, volumeName, err := decodeBackupURL(backupURL)
 	if err != nil {
+		deltaOps.UpdateBackupDeletionStatus(backupURL, 0, err.Error())
 		return err
 	}
 
 	v, err := loadVolume(volumeName, bsDriver)
 	if err != nil {
+		deltaOps.UpdateBackupDeletionStatus(backupURL, 0, err.Error())
 		return fmt.Errorf("Cannot find volume %v in backupstore", volumeName, err)
 	}
 
 	backup, err := loadBackup(backupName, volumeName, bsDriver)
 	if err != nil {
+		deltaOps.UpdateBackupDeletionStatus(backupURL, 0, err.Error())
 		return err
 	}
 	discardBlockSet := make(map[string]bool)
@@ -596,6 +621,7 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 	discardBlockCounts := len(discardBlockSet)
 
 	if err := removeBackup(backup, bsDriver); err != nil {
+		deltaOps.UpdateBackupDeletionStatus(backupURL, 0, err.Error())
 		return err
 	}
 
@@ -625,10 +651,13 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 		if err != nil {
 			return err
 		}
+		totalBlocks := len(backup.Blocks)
 		for _, blk := range backup.Blocks {
 			if _, exists := discardBlockSet[blk.BlockChecksum]; exists {
 				delete(discardBlockSet, blk.BlockChecksum)
 				discardBlockCounts--
+				progress = int((float64(1) - float64(discardBlockCounts)/float64(totalBlocks)) * PROGRESS_PERCENTAGE_BACKUP_DELETION)
+				deltaOps.UpdateBackupDeletionStatus(backupURL, progress, "")
 				if discardBlockCounts == 0 {
 					break
 				}
@@ -660,9 +689,10 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 	v.BlockCount -= int64(len(discardBlockSet))
 
 	if err := saveVolume(v, bsDriver); err != nil {
+		deltaOps.UpdateBackupDeletionStatus(backupURL, progress, err.Error())
 		return err
 	}
-
+	deltaOps.UpdateBackupDeletionStatus(backupURL, PROGRESS_PERCENTAGE_BACKUP_TOTAL, "")
 	return nil
 }
 

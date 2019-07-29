@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/longhorn/longhorn-engine/replica"
 	"github.com/urfave/cli"
 
 	"github.com/longhorn/backupstore"
@@ -41,7 +42,13 @@ func doBackupRemove(c *cli.Context) error {
 	volumeName := c.String("volume")
 	if volumeName == "" {
 		destURL = util.UnescapeURL(destURL)
-		if err := backupstore.DeleteDeltaBlockBackup(destURL); err != nil {
+		backupDeletion := replica.NewBackupDeletion(destURL)
+		config := &backupstore.DeltaBackupDeletionConfig{
+			BackupURL: destURL,
+			DeltaOps:  backupDeletion,
+		}
+
+		if err := backupstore.DeleteDeltaBlockBackup(config); err != nil {
 			return err
 		}
 	} else {
