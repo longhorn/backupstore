@@ -32,6 +32,7 @@ type Backup struct {
 
 	Blocks     []BlockMapping `json:",omitempty"`
 	SingleFile BackupFile     `json:",omitempty"`
+	Deleting   bool
 }
 
 var (
