@@ -83,7 +83,9 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	if volume.Deleting == true {
+		return "", fmt.Errorf("volume %v is being deleted, can't create a new backup", volume.Name)
+	}
 	lastBackupName := volume.LastBackupName
 
 	if err := deltaOps.OpenSnapshot(snapshot.Name, volume.Name); err != nil {
