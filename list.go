@@ -13,6 +13,7 @@ type VolumeInfo struct {
 	LastBackupName string
 	LastBackupAt   string
 	DataStored     int64 `json:",string"`
+	Deleting       bool
 
 	Messages map[MessageType]string
 
@@ -110,6 +111,7 @@ func fillVolumeInfo(volume *Volume) *VolumeInfo {
 		DataStored:     int64(volume.BlockCount * DEFAULT_BLOCK_SIZE),
 		Messages:       make(map[MessageType]string),
 		Backups:        make(map[string]*BackupInfo),
+		Deleting:       volume.Deleting,
 	}
 }
 
