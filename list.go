@@ -17,7 +17,7 @@ type VolumeInfo struct {
 
 	Messages map[MessageType]string
 
-	Backups map[string]*BackupInfo `json:",omitempty"`
+	Backups map[string]*BackupInfo
 }
 
 type BackupInfo struct {
