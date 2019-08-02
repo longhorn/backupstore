@@ -32,7 +32,6 @@ type BackupInfo struct {
 	VolumeName    string `json:",omitempty"`
 	VolumeSize    int64  `json:",string,omitempty"`
 	VolumeCreated string `json:",omitempty"`
-	Deleting      bool
 }
 
 func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool) (*VolumeInfo, error) {
@@ -125,7 +124,6 @@ func fillBackupInfo(backup *Backup, destURL string) *BackupInfo {
 		Created:         backup.CreatedTime,
 		Size:            backup.Size,
 		Labels:          backup.Labels,
-		Deleting:        backup.Deleting,
 	}
 }
 
