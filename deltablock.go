@@ -92,6 +92,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 
 	var lastSnapshotName string
 	var lastBackup *Backup
+	isIncrementalBackup := false
 	if lastBackupName != "" {
 		lastBackup, err = loadBackup(lastBackupName, volume.Name, bsDriver)
 		if err != nil {
@@ -125,6 +126,9 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 		LogFieldLastSnapshot: lastSnapshotName,
 	}).Debug("Generating snapshot changed blocks metadata")
 
+	if lastSnapshotName != "" {
+		isIncrementalBackup = true
+	}
 	delta, err := deltaOps.CompareSnapshot(snapshot.Name, lastSnapshotName, volume.Name)
 	if err != nil {
 		deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
@@ -158,7 +162,8 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 
 	go func() {
 		defer deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
-		if progress, backup, err := performIncrementalBackup(config, delta, deltaBackup, lastBackup, bsDriver); err != nil {
+		if progress, backup, err := performIncrementalBackup(config, delta, deltaBackup, lastBackup, bsDriver,
+			isIncrementalBackup); err != nil {
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, progress, "", err.Error())
 		} else {
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, progress, backup, "")
@@ -168,7 +173,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 }
 
 func performIncrementalBackup(config *DeltaBackupConfig, delta *Mappings, deltaBackup *Backup, lastBackup *Backup,
-	bsDriver BackupStoreDriver) (int, string, error) {
+	bsDriver BackupStoreDriver, isIncrementalBackup bool) (int, string, error) {
 
 	volume := config.Volume
 	snapshot := config.Snapshot
@@ -238,6 +243,7 @@ func performIncrementalBackup(config *DeltaBackupConfig, delta *Mappings, deltaB
 	backup.CreatedTime = util.Now()
 	backup.Size = int64(len(backup.Blocks)) * DEFAULT_BLOCK_SIZE
 	backup.Labels = config.Labels
+	backup.IsIncremental = isIncrementalBackup
 
 	if err := saveBackup(backup, bsDriver); err != nil {
 		return progress, "", err
