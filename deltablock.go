@@ -56,9 +56,9 @@ const (
 	PROGRESS_PERCENTAGE_BACKUP_TOTAL    = 100
 )
 
-func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
+func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 	if config == nil {
-		return "", fmt.Errorf("Invalid empty config for backup")
+		return "", false, fmt.Errorf("Invalid empty config for backup")
 	}
 
 	volume := config.Volume
@@ -66,28 +66,28 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 	destURL := config.DestURL
 	deltaOps := config.DeltaOps
 	if deltaOps == nil {
-		return "", fmt.Errorf("Missing DeltaBlockBackupOperations")
+		return "", false, fmt.Errorf("Missing DeltaBlockBackupOperations")
 	}
 
 	bsDriver, err := GetBackupStoreDriver(destURL)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	if err := addVolume(volume, bsDriver); err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	// Update volume from backupstore
 	volume, err = loadVolume(volume.Name, bsDriver)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	lastBackupName := volume.LastBackupName
 
 	if err := deltaOps.OpenSnapshot(snapshot.Name, volume.Name); err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	var lastSnapshotName string
@@ -97,7 +97,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 		lastBackup, err = loadBackup(lastBackupName, volume.Name, bsDriver)
 		if err != nil {
 			deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
-			return "", err
+			return "", isIncrementalBackup, err
 		}
 
 		lastSnapshotName = lastBackup.SnapshotName
@@ -132,11 +132,11 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 	delta, err := deltaOps.CompareSnapshot(snapshot.Name, lastSnapshotName, volume.Name)
 	if err != nil {
 		deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
-		return "", err
+		return "", isIncrementalBackup, err
 	}
 	if delta.BlockSize != DEFAULT_BLOCK_SIZE {
 		deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
-		return "", fmt.Errorf("currently doesn't support different block sizes driver other than %v", DEFAULT_BLOCK_SIZE)
+		return "", isIncrementalBackup, fmt.Errorf("currently doesn't support different block sizes driver other than %v", DEFAULT_BLOCK_SIZE)
 	}
 	log.WithFields(logrus.Fields{
 		LogFieldReason:       LogReasonComplete,
@@ -169,7 +169,7 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, error) {
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, progress, backup, "")
 		}
 	}()
-	return deltaBackup.Name, nil
+	return deltaBackup.Name, isIncrementalBackup, nil
 }
 
 func performIncrementalBackup(config *DeltaBackupConfig, delta *Mappings, deltaBackup *Backup, lastBackup *Backup,

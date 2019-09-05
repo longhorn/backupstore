@@ -230,7 +230,7 @@ func (s *TestSuite) getDestURL() string {
 }
 
 func (s *TestSuite) createAndWaitForBackup(c *C, config *backupstore.DeltaBackupConfig, deltaOps *RawFileVolume) string {
-	_, err := backupstore.CreateDeltaBlockBackup(config)
+	_, _, err := backupstore.CreateDeltaBlockBackup(config)
 	c.Assert(err, IsNil)
 
 	retryCount := 120
