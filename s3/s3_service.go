@@ -125,7 +125,7 @@ func (s *Service) DeleteObjects(keys []string) error {
 	for _, key := range keys {
 		contents, _, err := s.ListObjects(key, "")
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to list object %v before removing it: %v", key, err)
 		}
 		size := len(contents)
 		if size == 0 {
@@ -139,7 +139,7 @@ func (s *Service) DeleteObjects(keys []string) error {
 
 	svc, err := s.New()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get a new s3 client instance before removing objects: %v", err)
 	}
 	defer s.Close()
 
@@ -160,7 +160,7 @@ func (s *Service) DeleteObjects(keys []string) error {
 
 	resp, err := svc.DeleteObjects(params)
 	if err != nil {
-		return parseAwsError(resp.String(), err)
+		return fmt.Errorf("failed to remove objects with param %+v: %v", params, parseAwsError(resp.String(), err))
 	}
 	return nil
 }
