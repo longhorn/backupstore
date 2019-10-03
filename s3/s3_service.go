@@ -149,18 +149,20 @@ func (s *Service) DeleteObjects(keys []string) error {
 			Key: aws.String(k),
 		}
 	}
-	quiet := true
-	params := &s3.DeleteObjectsInput{
-		Bucket: aws.String(s.Bucket),
-		Delete: &s3.Delete{
-			Objects: identifiers,
-			Quiet:   &quiet,
-		},
-	}
+	if len(identifiers) != 0 {
+		quiet := true
+		params := &s3.DeleteObjectsInput{
+			Bucket: aws.String(s.Bucket),
+			Delete: &s3.Delete{
+				Objects: identifiers,
+				Quiet:   &quiet,
+			},
+		}
 
-	resp, err := svc.DeleteObjects(params)
-	if err != nil {
-		return fmt.Errorf("failed to remove objects with param %+v: %v", params, parseAwsError(resp.String(), err))
+		resp, err := svc.DeleteObjects(params)
+		if err != nil {
+			return fmt.Errorf("failed to remove objects with param %+v: %v", params, parseAwsError(resp.String(), err))
+		}
 	}
 	return nil
 }
