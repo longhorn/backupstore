@@ -26,7 +26,6 @@ ENV DAPPER_OUTPUT ./bin
 ENV DAPPER_DOCKER_SOCKET true
 ENV DAPPER_ENV IMAGE REPO VERSION TAG
 ENV DAPPER_RUN_ARGS --privileged --tmpfs /go/src/github.com/longhorn/longhorn/integration/.venv:exec --tmpfs /go/src/github.com/longhorn/longhorn/integration/.tox:exec -v /dev:/host/dev
-ENV TRASH_CACHE ${DAPPER_SOURCE}/.trash-cache
 ENV HOME ${DAPPER_SOURCE}
 WORKDIR ${DAPPER_SOURCE}
 
