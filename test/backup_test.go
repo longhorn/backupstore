@@ -122,11 +122,11 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 	}
 
 	snap1, err := os.Open(id)
-	defer snap1.Close()
 	if err != nil {
 		fmt.Println("Fail to open", id)
 		return nil, err
 	}
+	defer snap1.Close()
 
 	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
 
@@ -149,11 +149,11 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 	}
 
 	snap2, err := os.Open(compareID)
-	defer snap2.Close()
 	if err != nil {
 		fmt.Println("Fail to open", compareID)
 		return nil, err
 	}
+	defer snap2.Close()
 
 	for i := int64(0); i < volumeContentSize/blockSize; i++ {
 		offset := i * blockSize
