@@ -131,9 +131,10 @@ func fillVolumeInfo(volume *Volume) *VolumeInfo {
 func failedBackupInfo(backupName string, volumeName string,
 	destURL string, err error) *BackupInfo {
 	return &BackupInfo{
-		Name:     backupName,
-		URL:      encodeBackupURL(backupName, volumeName, destURL),
-		Messages: map[MessageType]string{MessageTypeError: err.Error()},
+		Name:       backupName,
+		URL:        encodeBackupURL(backupName, volumeName, destURL),
+		VolumeName: volumeName,
+		Messages:   map[MessageType]string{MessageTypeError: err.Error()},
 	}
 }
 
