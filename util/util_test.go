@@ -115,6 +115,10 @@ func (s *TestSuite) TestExtractNames(c *C) {
 	files[0] = "prefix__dd_xx.suffix"
 	result, err = ExtractNames(files, "prefix_", ".suffix")
 	c.Assert(err, ErrorMatches, "Invalid name.*")
+
+	files[0] = "backup_1234@failure.cfg"
+	result, err = ExtractNames(files, "backup_", ".cfg")
+	c.Assert(err, ErrorMatches, "Invalid name.*")
 }
 
 func (s *TestSuite) TestValidateName(c *C) {

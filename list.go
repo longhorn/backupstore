@@ -47,11 +47,6 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 		return nil, fmt.Errorf("Invalid volume name %v", volumeName)
 	}
 
-	backupNames, err := getBackupNamesForVolume(volumeName, driver)
-	if err != nil {
-		return nil, err
-	}
-
 	volume, err := loadVolume(volumeName, driver)
 	if err != nil {
 		return &VolumeInfo{
@@ -63,6 +58,13 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 
 	volumeInfo := fillVolumeInfo(volume)
 	if volumeOnly {
+		return volumeInfo, nil
+	}
+
+	// try to find all backups for this volume
+	backupNames, err := getBackupNamesForVolume(volumeName, driver)
+	if err != nil {
+		volumeInfo.Messages[MessageTypeError] = err.Error()
 		return volumeInfo, nil
 	}
 
