@@ -689,9 +689,18 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 		log.Infof("Skipping block deletion because we found new backups for volume %v", volumeName)
 		return nil
 	}
-	if err := bsDriver.Remove(blkFileList...); err != nil {
-		return err
+
+	var deletionFailures []string
+	for _, blk := range blkFileList {
+		if err := bsDriver.Remove(blk); err != nil {
+			deletionFailures = append(deletionFailures, blk)
+		}
 	}
+
+	if len(deletionFailures) > 0 {
+		return fmt.Errorf("failed to delete backup blocks: %v", deletionFailures)
+	}
+
 	log.Debug("Removed unused blocks for volume ", volumeName)
 
 	log.Debug("GC completed")
