@@ -93,32 +93,34 @@ func (s *TestSuite) TestExtractNames(c *C) {
 		files[i] = prefix + names[i] + suffix
 	}
 
-	result, err := ExtractNames(files, "prefix_", ".suffix")
-	c.Assert(err, Equals, nil)
+	result := ExtractNames(files, "prefix_", ".suffix")
 	for i := 0; i < counts; i++ {
 		c.Assert(result[i], Equals, names[i])
 	}
 
 	files[0] = "/" + files[0]
-	result, err = ExtractNames(files, "prefix_", ".suffix")
-	c.Assert(err, Equals, nil)
+	result = ExtractNames(files, "prefix_", ".suffix")
 	c.Assert(result[0], Equals, names[0])
 
 	files[0] = "prefix_.dd_xx.suffix"
-	result, err = ExtractNames(files, "prefix_", ".suffix")
-	c.Assert(err, ErrorMatches, "Invalid name.*")
+	result = ExtractNames(files, "prefix_", ".suffix")
+	c.Assert(len(result), Equals, len(files)-1)
+	c.Assert(result[0], Equals, names[1]) // files[0] is invalid
 
 	files[0] = "prefix_-dd_xx.suffix"
-	result, err = ExtractNames(files, "prefix_", ".suffix")
-	c.Assert(err, ErrorMatches, "Invalid name.*")
+	result = ExtractNames(files, "prefix_", ".suffix")
+	c.Assert(len(result), Equals, len(files)-1)
+	c.Assert(result[0], Equals, names[1]) // files[0] is invalid
 
 	files[0] = "prefix__dd_xx.suffix"
-	result, err = ExtractNames(files, "prefix_", ".suffix")
-	c.Assert(err, ErrorMatches, "Invalid name.*")
+	result = ExtractNames(files, "prefix_", ".suffix")
+	c.Assert(len(result), Equals, len(files)-1)
+	c.Assert(result[0], Equals, names[1]) // files[0] is invalid
 
-	files[0] = "backup_1234@failure.cfg"
-	result, err = ExtractNames(files, "backup_", ".cfg")
-	c.Assert(err, ErrorMatches, "Invalid name.*")
+	files[0] = "prefix_1234@failure.suffix"
+	result = ExtractNames(files, "prefix_", ".suffix")
+	c.Assert(len(result), Equals, len(files)-1)
+	c.Assert(result[0], Equals, names[1]) // files[0] is invalid
 }
 
 func (s *TestSuite) TestValidateName(c *C) {
