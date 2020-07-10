@@ -18,6 +18,7 @@ import (
 	"github.com/longhorn/backupstore"
 	_ "github.com/longhorn/backupstore/nfs"
 	"github.com/longhorn/backupstore/util"
+
 	//_ "github.com/longhorn/backupstore/vfs"
 	. "gopkg.in/check.v1"
 )
@@ -439,6 +440,16 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 	err = snap1.Close()
 	c.Assert(err, IsNil)
 
+	//delta1 file between snap1 and snap0
+	delta1, err := os.Create("delta1")
+	c.Assert(err, IsNil)
+	_, err = delta1.WriteAt(dataEmpty, 2*blockSize)
+	c.Assert(err, IsNil)
+	err = delta1.Truncate(volumeSize)
+	c.Assert(err, IsNil)
+	err = delta1.Close()
+	c.Assert(err, IsNil)
+
 	// snap2: blk * 5
 	snap2, err := os.Create(volume.Snapshots[2].Name)
 	c.Assert(err, IsNil)
@@ -451,6 +462,16 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 	err = snap2.Close()
 	c.Assert(err, IsNil)
 
+	//delta2 file between snap2 and snap1
+	delta2, err := os.Create("delta2")
+	c.Assert(err, IsNil)
+	_, err = delta2.WriteAt(data, 4*blockSize)
+	c.Assert(err, IsNil)
+	err = delta2.Truncate(volumeSize)
+	c.Assert(err, IsNil)
+	err = delta2.Close()
+	c.Assert(err, IsNil)
+
 	// snap3: blk * 2 + modified blk * 1 + blk * 1
 	snap3, err := os.Create(volume.Snapshots[3].Name)
 	c.Assert(err, IsNil)
@@ -461,6 +482,16 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 	err = snap3.Truncate(volumeSize)
 	c.Assert(err, IsNil)
 	err = snap3.Close()
+	c.Assert(err, IsNil)
+
+	//delta3 file between snap3 and snap2
+	delta3, err := os.Create("delta3")
+	c.Assert(err, IsNil)
+	_, err = delta3.WriteAt(dataModified, 2*blockSize)
+	c.Assert(err, IsNil)
+	err = delta3.Truncate(volumeSize)
+	c.Assert(err, IsNil)
+	err = delta3.Close()
 	c.Assert(err, IsNil)
 
 	// snap4 is consist of: blk * 1 + empty blk * 1 + modified blk * 1 + blk * 2
@@ -477,6 +508,18 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 	err = snap4.Truncate(volumeSize)
 	c.Assert(err, IsNil)
 	err = snap4.Close()
+	c.Assert(err, IsNil)
+
+	//delta4 file between snap4 and snap3
+	delta4, err := os.Create("delta4")
+	c.Assert(err, IsNil)
+	_, err = delta4.WriteAt(dataEmpty, 1*blockSize)
+	c.Assert(err, IsNil)
+	_, err = delta4.WriteAt(data, 4*blockSize)
+	c.Assert(err, IsNil)
+	err = delta4.Truncate(volumeSize)
+	c.Assert(err, IsNil)
+	err = delta4.Close()
 	c.Assert(err, IsNil)
 
 	lastBackupName := ""
@@ -519,14 +562,14 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 			c.Assert(err, NotNil)
 			c.Assert(err, ErrorMatches, "invalid parameter lastBackupName "+lastBackupName)
 
-			err = os.Rename(restore, restoreIncre)
-			c.Assert(err, IsNil)
 		} else {
 			c.Assert(err, IsNil)
 
 			s.waitForRestoreCompletion(c, &volume)
-			err = exec.Command("diff", restoreIncre, volume.Snapshots[i].Name).Run()
+			deltaName := "delta" + strconv.Itoa(i)
+			err = exec.Command("diff", restoreIncre, deltaName).Run()
 			c.Assert(err, IsNil)
+			os.Remove(deltaName)
 		}
 
 		backupInfo, err := backupstore.InspectBackup(backup)
