@@ -4,7 +4,15 @@ set -e
 NFS_SERVER=backupstore_nfs_test_server
 NFS_PATH="/opt/backupstore"
 
+docker ps -a | grep "${NFS_SERVER}"
+
+if [[ $? -eq 0 ]]; then
+	docker rm -f "${NFS_SERVER}"
+fi
+
 function cleanup {
+        echo Unmounting NFS Share
+        umount `mount -l | grep nfs | grep "${NFS_IPADDR}" |  awk '{print $3}'`
         echo Stopping NFS server
         docker rm -vf $NFS_SERVER
 }
@@ -14,7 +22,10 @@ cd $(dirname $0)/..
 
 echo Starting NFS server
 
-docker run -d --name $NFS_SERVER --net container:$(hostname) --privileged docker.io/erezhorev/dockerized_nfs_server $NFS_PATH
+docker pull longhornio/nfs-ganesha:latest
+docker run -d --name $NFS_SERVER --privileged longhornio/nfs-ganesha:latest
+
+export NFS_IPADDR=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${NFS_SERVER}`
 
 echo Wait for NFS server\'s 90 seconds grace period to pass
 sleep 90
