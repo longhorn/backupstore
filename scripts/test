@@ -4,10 +4,8 @@ set -e
 NFS_SERVER=backupstore_nfs_test_server
 NFS_PATH="/opt/backupstore"
 
-docker ps -a | grep "${NFS_SERVER}"
-
-if [[ $? -eq 0 ]]; then
-	docker rm -f "${NFS_SERVER}"
+if [[ ! -z $(docker ps -a | grep "${NFS_SERVER}") ]]; then
+        docker rm -f "${NFS_SERVER}"
 fi
 
 function cleanup {
