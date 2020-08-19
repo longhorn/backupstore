@@ -227,6 +227,14 @@ func (s *TestSuite) TearDownSuite(c *C) {
 
 func (s *TestSuite) getDestURL() string {
 	//return "vfs://" + s.BackupStorePath
+
+	_, runningInDapper := os.LookupEnv("DAPPER_SOURCE")
+
+	if runningInDapper {
+		nfsIPAddr := os.Getenv("NFS_IPADDR")
+		return "nfs://" + nfsIPAddr + ":/"
+	}
+
 	return "nfs://127.0.0.1:/opt/backupstore"
 }
 
