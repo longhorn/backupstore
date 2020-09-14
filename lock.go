@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/longhorn/backupstore/util"
 )
 
@@ -16,9 +18,7 @@ const (
 	LOCK_PREFIX           = "lock"
 	LOCK_SUFFIX           = ".lck"
 	LOCK_DURATION         = time.Second * 150
-	LOCK_MAX_WAIT_TIME    = time.Second * 30
 	LOCK_REFRESH_INTERVAL = time.Second * 60
-	LOCK_CHECK_INTERVAL   = time.Second * 10
 	LOCK_CHECK_WAIT_TIME  = time.Second * 2
 )
 
@@ -53,9 +53,18 @@ func (lock *FileLock) isExpired() bool {
 	return isExpired
 }
 
+func (lock *FileLock) String() string {
+	return fmt.Sprintf("{ volume: %v, name: %v, type: %v, acquired: %v, serverTime: %v }",
+		lock.volume, lock.Name, lock.Type, lock.Acquired, lock.serverTime)
+}
+
 func (lock *FileLock) canAcquire() bool {
 	canAcquire := true
 	locks := getLocksForVolume(lock.volume, lock.driver)
+	file := getLockFilePath(lock.volume, lock.Name)
+	log.WithField("lock", lock).Debugf("trying to acquire lock %v", file)
+	log.Debugf("backupstore volume %v contains locks %v", lock.volume, locks)
+
 	for _, serverLock := range locks {
 		serverLockHasDifferentType := serverLock.Type != lock.Type
 		serverLockHasPriority := compareLocks(serverLock, lock) < 0
@@ -82,7 +91,7 @@ func (lock *FileLock) Lock() error {
 	// one of us will be first in the times array
 	// the servers modification time is only the initial lock creation time
 	// and we do not need to start lock refreshing till after we acquired the lock
-	// since lock expiration is based on the serverTime + LOCK_MAX_WAIT_TIME
+	// since lock expiration is based on the serverTime + LOCK_DURATION
 	if err := saveLock(lock); err != nil {
 		return err
 	}
@@ -92,49 +101,45 @@ func (lock *FileLock) Lock() error {
 	// where 2 processes request a lock at the same time
 	time.Sleep(LOCK_CHECK_WAIT_TIME)
 
-	for acquired := lock.Acquired; !acquired; acquired = lock.Acquired {
-		if lock.canAcquire() {
-			file := getLockFilePath(lock.volume, lock.Name)
-			log.Debugf("Acquired lock %v type %v on backupstore", file, lock.Type)
-			lock.Acquired = true
-			atomic.AddInt32(&lock.count, 1)
-			if err := saveLock(lock); err != nil {
-				_ = removeLock(lock)
-				return err
-			}
+	// we only try to acquire once, since backup operations generally take a long time
+	// there is no point in trying to wait for lock acquisition, better to throw an error
+	// and let the calling code retry with an exponential backoff.
+	if !lock.canAcquire() {
+		file := getLockFilePath(lock.volume, lock.Name)
+		_ = removeLock(lock)
+		return fmt.Errorf("failed lock %v type %v acquisition", file, lock.Type)
+	}
 
-			// enable lock refresh
-			lock.keepAlive = make(chan struct{})
-			go func() {
-				refreshTimer := time.NewTicker(LOCK_REFRESH_INTERVAL)
-				defer refreshTimer.Stop()
-				for {
-					select {
-					case <-lock.keepAlive:
-						return
-					case <-refreshTimer.C:
-						lock.mutex.Lock()
-						if lock.Acquired {
-							_ = saveLock(lock)
-						}
-						lock.mutex.Unlock()
+	file := getLockFilePath(lock.volume, lock.Name)
+	log.Debugf("Acquired lock %v type %v on backupstore", file, lock.Type)
+	lock.Acquired = true
+	atomic.AddInt32(&lock.count, 1)
+	if err := saveLock(lock); err != nil {
+		_ = removeLock(lock)
+		return errors.Wrapf(err, "failed to store updated lock %v type %v after acquisition", file, lock.Type)
+	}
+
+	// enable lock refresh
+	lock.keepAlive = make(chan struct{})
+	go func() {
+		refreshTimer := time.NewTicker(LOCK_REFRESH_INTERVAL)
+		defer refreshTimer.Stop()
+		for {
+			select {
+			case <-lock.keepAlive:
+				return
+			case <-refreshTimer.C:
+				lock.mutex.Lock()
+				if lock.Acquired {
+					if err := saveLock(lock); err != nil {
+						// nothing we can do here, that's why the lock acquisition time is 2x lock refresh interval
+						log.Debugf("Failed to refresh acquired lock %v type %v", file, lock.Type)
 					}
 				}
-			}()
-			break
+				lock.mutex.Unlock()
+			}
 		}
-
-		if timeout := time.Now().Sub(lock.serverTime) > LOCK_MAX_WAIT_TIME; timeout {
-			file := getLockFilePath(lock.volume, lock.Name)
-			_ = removeLock(lock)
-			return fmt.Errorf("failed lock %v type %v acquisition, exceeded maximum wait time %v",
-				file, lock.Type, LOCK_MAX_WAIT_TIME)
-		}
-
-		if !lock.Acquired {
-			time.Sleep(LOCK_CHECK_INTERVAL)
-		}
-	}
+	}()
 
 	return nil
 }
@@ -215,9 +220,9 @@ func getLockNamesForVolume(volumeName string, driver BackupStoreDriver) []string
 }
 
 func getLocksForVolume(volumeName string, driver BackupStoreDriver) []*FileLock {
-	fileList := getLockNamesForVolume(volumeName, driver)
-	locks := make([]*FileLock, 0, len(fileList))
-	for _, name := range fileList {
+	names := getLockNamesForVolume(volumeName, driver)
+	locks := make([]*FileLock, 0, len(names))
+	for _, name := range names {
 		lock, err := loadLock(volumeName, name, driver)
 		if err != nil {
 			file := getLockFilePath(volumeName, name)
