@@ -36,7 +36,7 @@ type FileLock struct {
 	driver     BackupStoreDriver
 	volume     string
 	count      int32
-	serverTime time.Time
+	serverTime time.Time // UTC time
 	keepAlive  chan struct{}
 	mutex      sync.Mutex
 }
@@ -48,7 +48,8 @@ func New(driver BackupStoreDriver, volumeName string, lockType LockType) (*FileL
 
 // isExpired checks whether the current lock is expired
 func (lock *FileLock) isExpired() bool {
-	isExpired := time.Now().Sub(lock.serverTime) > LOCK_DURATION
+	// server time is always in UTC
+	isExpired := time.Now().UTC().Sub(lock.serverTime) > LOCK_DURATION
 	return isExpired
 }
 
@@ -186,12 +187,12 @@ func saveLock(lock *FileLock) error {
 }
 
 // compareLocks compares the locks by Acquired
-// then by serverTime followed by Name
+// then by serverTime (UTC) followed by Name
 func compareLocks(a *FileLock, b *FileLock) int {
 	if a.Acquired == b.Acquired {
-		if a.serverTime.Equal(b.serverTime) {
+		if a.serverTime.UTC().Equal(b.serverTime.UTC()) {
 			return strings.Compare(a.Name, b.Name)
-		} else if a.serverTime.Before(b.serverTime) {
+		} else if a.serverTime.UTC().Before(b.serverTime.UTC()) {
 			return -1
 		} else {
 			return 1
