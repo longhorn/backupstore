@@ -51,7 +51,7 @@ func (f *FileSystemOperator) FileTime(filePath string) time.Time {
 		return time.Time{}
 	}
 
-	return st.ModTime()
+	return st.ModTime().UTC()
 }
 
 func (f *FileSystemOperator) FileExists(filePath string) bool {
@@ -88,7 +88,7 @@ func (f *FileSystemOperator) Read(src string) (io.ReadCloser, error) {
 
 func (f *FileSystemOperator) Write(dst string, rs io.ReadSeeker) error {
 	// we append the timestamp to the tmp files so that we should never have 2 backups using the same tmp file
-	tmpFile := dst + ".tmp" + "." + strconv.FormatInt(time.Now().UnixNano(), 10)
+	tmpFile := dst + ".tmp" + "." + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 	if err := f.preparePath(dst); err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (f *FileSystemOperator) List(path string) ([]string, error) {
 }
 
 func (f *FileSystemOperator) Upload(src, dst string) error {
-	tmpDst := dst + ".tmp" + "." + strconv.FormatInt(time.Now().UnixNano(), 10)
+	tmpDst := dst + ".tmp" + "." + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 	if f.FileExists(tmpDst) {
 		f.Remove(tmpDst)
 	}

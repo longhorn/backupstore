@@ -160,7 +160,7 @@ func (s *BackupStoreDriver) FileTime(filePath string) time.Time {
 	if err != nil || head.ContentLength == nil {
 		return time.Time{}
 	}
-	return aws.TimeValue(head.LastModified)
+	return aws.TimeValue(head.LastModified).UTC()
 }
 
 func (s *BackupStoreDriver) Remove(path string) error {
