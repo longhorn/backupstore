@@ -472,6 +472,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 			log.Debugf("Restore for %v: block %v, %v/%v", volDevName, block.BlockChecksum, i+1, blkCounts)
 			if err := restoreBlockToFile(srcVolumeName, volDev, bsDriver, block); err != nil {
 				deltaOps.UpdateRestoreStatus(volDevName, progress, err)
+				return
 			}
 			progress = int((float64(i+1) / float64(blkCounts)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
 			deltaOps.UpdateRestoreStatus(volDevName, progress, err)
@@ -482,6 +483,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 			log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
 			if err := volDev.Truncate(vol.Size); err != nil {
 				deltaOps.UpdateRestoreStatus(volDevName, progress, err)
+				return
 			}
 		}
 		deltaOps.UpdateRestoreStatus(volDevName, PROGRESS_PERCENTAGE_BACKUP_TOTAL, nil)
