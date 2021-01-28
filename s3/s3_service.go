@@ -74,7 +74,7 @@ func (s *Service) ListObjects(key, delimiter string) ([]*s3.Object, []*s3.Common
 	defer s.Close()
 	// WARNING: Directory must end in "/" in S3, otherwise it may match
 	// unintentially
-	params := &s3.ListObjectsV2Input{
+	params := &s3.ListObjectsInput{
 		Bucket:    aws.String(s.Bucket),
 		Prefix:    aws.String(key),
 		Delimiter: aws.String(delimiter),
@@ -84,7 +84,7 @@ func (s *Service) ListObjects(key, delimiter string) ([]*s3.Object, []*s3.Common
 		objects       []*s3.Object
 		commonPrefixs []*s3.CommonPrefix
 	)
-	err = svc.ListObjectsV2Pages(params, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+	err = svc.ListObjectsPages(params, func(page *s3.ListObjectsOutput, lastPage bool) bool {
 		objects = append(objects, page.Contents...)
 		commonPrefixs = append(commonPrefixs, page.CommonPrefixes...)
 		return !lastPage
