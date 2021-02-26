@@ -158,3 +158,71 @@ func TestList(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(m.numOfVolumes, len(volumeInfo))
 }
+
+func BenchmarkListAllVolumeOnly10ms32volumes(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 32,
+		delay:        10 * time.Millisecond,
+	}
+	m.Init()
+	initFunc := func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	}
+	_ = RegisterDriver("mock", initFunc)
+
+	for i := 0; i < b.N; i++ {
+		_, _ = List("", "mock://localhost", true)
+	}
+}
+
+func BenchmarkListAllVolumeOnly100ms32volumes(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 32,
+		delay:        100 * time.Millisecond,
+	}
+	m.Init()
+	initFunc := func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	}
+	_ = RegisterDriver("mock", initFunc)
+
+	for i := 0; i < b.N; i++ {
+		_, _ = List("", "mock://localhost", true)
+	}
+}
+
+func BenchmarkListAllVolumeOnly250ms32volumes(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 32,
+		delay:        250 * time.Millisecond,
+	}
+	m.Init()
+	initFunc := func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	}
+	_ = RegisterDriver("mock", initFunc)
+
+	for i := 0; i < b.N; i++ {
+		_, _ = List("", "mock://localhost", true)
+	}
+}
+
+func BenchmarkListAllVolumeOnly500ms32volumes(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 32,
+		delay:        500 * time.Millisecond,
+	}
+	m.Init()
+	initFunc := func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	}
+	_ = RegisterDriver("mock", initFunc)
+
+	for i := 0; i < b.N; i++ {
+		_, _ = List("", "mock://localhost", true)
+	}
+}
