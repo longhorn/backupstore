@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/honestbee/jobq"
 	"github.com/sirupsen/logrus"
@@ -102,7 +103,7 @@ func getVolumeFilePath(volumeName string) string {
 }
 
 // getVolumeNames returns all volume names based on the folders on the backupstore
-func getVolumeNames(jobQueues *jobq.WorkerDispatcher, driver BackupStoreDriver) ([]string, error) {
+func getVolumeNames(jobQueues *jobq.WorkerDispatcher, jobQueueTimeout time.Duration, driver BackupStoreDriver) ([]string, error) {
 	names := []string{}
 	volumePathBase := filepath.Join(backupstoreBase, VOLUME_DIRECTORY)
 	lv1Dirs, err := driver.List(volumePathBase)
@@ -118,7 +119,7 @@ func getVolumeNames(jobQueues *jobq.WorkerDispatcher, driver BackupStoreDriver) 
 	)
 	for _, lv1Dir := range lv1Dirs {
 		path := filepath.Join(volumePathBase, lv1Dir)
-		lv1Tracker := jobQueues.QueueFunc(context.Background(), func(ctx context.Context) (interface{}, error) {
+		lv1Tracker := jobQueues.QueueTimedFunc(context.Background(), func(ctx context.Context) (interface{}, error) {
 			lv2Dirs, err := driver.List(path)
 			if err != nil {
 				log.Warnf("failed to list second level dirs for path: %v reason: %v", path, err)
@@ -130,7 +131,7 @@ func getVolumeNames(jobQueues *jobq.WorkerDispatcher, driver BackupStoreDriver) 
 				lv2Paths[i] = filepath.Join(path, lv2Dirs[i])
 			}
 			return lv2Paths, nil
-		})
+		}, jobQueueTimeout)
 		lv1Trackers = append(lv1Trackers, lv1Tracker)
 	}
 
@@ -144,14 +145,14 @@ func getVolumeNames(jobQueues *jobq.WorkerDispatcher, driver BackupStoreDriver) 
 		lv2Paths := payload.([]string)
 		for _, lv2Path := range lv2Paths {
 			path := lv2Path
-			lv2Tracker := jobQueues.QueueFunc(context.Background(), func(ctx context.Context) (interface{}, error) {
+			lv2Tracker := jobQueues.QueueTimedFunc(context.Background(), func(ctx context.Context) (interface{}, error) {
 				volumeNames, err := driver.List(path)
 				if err != nil {
 					log.Warnf("failed to list volume names for path: %v reason: %v", path, err)
 					return nil, err
 				}
 				return volumeNames, nil
-			})
+			}, jobQueueTimeout)
 			lv2Trackers = append(lv2Trackers, lv2Tracker)
 		}
 	}
