@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/honestbee/jobq"
 	"github.com/sirupsen/logrus"
@@ -116,10 +117,11 @@ func List(volumeName, destURL string, volumeOnly bool) (map[string]*VolumeInfo, 
 		jobq.WorkerPoolSize(256),
 	)
 	defer jobQueues.Stop()
+	jobQueueTimeout := 30 * time.Second
 
 	volumeNames := []string{volumeName}
 	if volumeName == "" {
-		volumeNames, err = getVolumeNames(jobQueues, driver)
+		volumeNames, err = getVolumeNames(jobQueues, jobQueueTimeout, driver)
 		if err != nil {
 			return nil, err
 		}
@@ -128,9 +130,9 @@ func List(volumeName, destURL string, volumeOnly bool) (map[string]*VolumeInfo, 
 	var trackers []jobq.JobTracker
 	for _, volumeName := range volumeNames {
 		volumeName := volumeName
-		tracker := jobQueues.QueueFunc(context.Background(), func(ctx context.Context) (interface{}, error) {
+		tracker := jobQueues.QueueTimedFunc(context.Background(), func(ctx context.Context) (interface{}, error) {
 			return addListVolume(volumeName, driver, volumeOnly)
-		})
+		}, jobQueueTimeout)
 		trackers = append(trackers, tracker)
 	}
 
