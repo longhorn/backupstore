@@ -27,7 +27,7 @@ const (
 	volumeName        = "BackupStoreTestVolume"
 	volumeName2       = "BackupStoreExtraTestVolume"
 	volumeContentSize = int64(5 * 2 * 1024 * 1024)       // snapshotCounts number of blocks
-	volumeSize        = int64((5 + 4) * 2 * 1024 * 1024) // snapshotCounts number of blocks + intented empty block
+	volumeSize        = int64((5 + 4) * 2 * 1024 * 1024) // snapshotCounts number of blocks + intended empty block
 	snapPrefix        = "volume_snap"
 	snapshotCounts    = 5
 	snapIncrePreifix  = "restore-snap-"
