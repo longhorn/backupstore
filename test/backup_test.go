@@ -14,13 +14,11 @@ import (
 	"testing"
 	"time"
 
-	//"github.com/sirupsen/logrus"
+	. "gopkg.in/check.v1"
+
 	"github.com/longhorn/backupstore"
 	_ "github.com/longhorn/backupstore/nfs"
 	"github.com/longhorn/backupstore/util"
-
-	//_ "github.com/longhorn/backupstore/vfs"
-	. "gopkg.in/check.v1"
 )
 
 const (
@@ -207,7 +205,6 @@ func (s *TestSuite) randomChange(data []byte, offset, length int64) {
 }
 
 func (s *TestSuite) SetUpSuite(c *C) {
-	//logrus.SetLevel(logrus.DebugLevel)
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	dir, err := ioutil.TempDir("", "backupstore-test")
