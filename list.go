@@ -117,7 +117,7 @@ func List(volumeName, destURL string, volumeOnly bool) (map[string]*VolumeInfo, 
 		jobq.WorkerPoolSize(256),
 	)
 	defer jobQueues.Stop()
-	jobQueueTimeout := 30 * time.Second
+	jobQueueTimeout := time.Minute
 
 	volumeNames := []string{volumeName}
 	if volumeName == "" {
