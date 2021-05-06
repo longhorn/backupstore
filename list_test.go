@@ -13,33 +13,52 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	mockDriverName = "mock"
+	mockDriverURL  = "mock://localhost"
+)
+
 type mockStoreDriver struct {
 	destURL      string
 	delay        time.Duration
 	numOfVolumes int
-	volumePaths  []string
+	numOfBackups int
+	volumeInfos  map[string]*VolumeInfo
 }
 
 func (m *mockStoreDriver) Init() {
-	if len(m.volumePaths) > 0 {
+	if len(m.volumeInfos) > 0 {
 		return
 	}
+	m.volumeInfos = make(map[string]*VolumeInfo, m.numOfVolumes)
 
 	rand.Seed(time.Now().UnixNano())
 	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	for i := 0; i < m.numOfVolumes; i++ {
 		// generate random string with length 5
-		b := make([]rune, 5)
-		for i := range b {
-			b[i] = letterRunes[rand.Intn(len(letterRunes))]
+		pvc := make([]rune, 5)
+		for i := range pvc {
+			pvc[i] = letterRunes[rand.Intn(len(letterRunes))]
 		}
-		volumeName := fmt.Sprintf("pvc-%s", string(b))
-		m.volumePaths = append(m.volumePaths, getVolumePath((volumeName)))
+		volumeName := fmt.Sprintf("pvc-%s", string(pvc))
+
+		backups := make(map[string]*BackupInfo, m.numOfBackups)
+		for j := 0; j < m.numOfBackups; j++ {
+			// generate random string with length 5
+			backup := make([]rune, 5)
+			for i := range backup {
+				backup[i] = letterRunes[rand.Intn(len(letterRunes))]
+			}
+			backupName := fmt.Sprintf("backup_backup-%s.cfg", string(backup))
+			backups[backupName] = &BackupInfo{Name: backupName}
+		}
+
+		m.volumeInfos[volumeName] = &VolumeInfo{Name: volumeName, Backups: backups}
 	}
 }
 
 func (m *mockStoreDriver) Kind() string {
-	return "mock"
+	return mockDriverName
 }
 
 func (m *mockStoreDriver) GetURL() string {
@@ -58,7 +77,8 @@ func (m *mockStoreDriver) List(listPath string) ([]string, error) {
 	case 1:
 		// for listPath equal to "backupstore/volumes"
 		lv1Map := make(map[string]struct{})
-		for _, path := range m.volumePaths {
+		for volumeName := range m.volumeInfos {
+			path := getVolumePath(volumeName)
 			if strings.HasPrefix(path, listPath) {
 				ss := strings.Split(path, "/")
 				lv1Map[ss[2]] = struct{}{}
@@ -72,7 +92,8 @@ func (m *mockStoreDriver) List(listPath string) ([]string, error) {
 	case 2:
 		// for listPath equal to "backupstore/volumes/xx"
 		lv2Map := make(map[string]struct{})
-		for _, path := range m.volumePaths {
+		for volumeName := range m.volumeInfos {
+			path := getVolumePath(volumeName)
 			if strings.HasPrefix(path, listPath) {
 				ss := strings.Split(path, "/")
 				lv2Map[ss[3]] = struct{}{}
@@ -86,25 +107,34 @@ func (m *mockStoreDriver) List(listPath string) ([]string, error) {
 	case 3:
 		// for listPath equal to "backupstore/volumes/xx/yy"
 		volumePaths := []string{}
-		for _, path := range m.volumePaths {
+		for volumeName := range m.volumeInfos {
+			path := getVolumePath(volumeName)
 			if strings.HasPrefix(path, listPath) {
 				ss := strings.Split(path, "/")
 				volumePaths = append(volumePaths, ss[4])
 			}
 		}
 		return volumePaths, nil
+	case 6:
+		// for listPath equal to "backupstore/volumes/xx/yy/pvc-zzz/backups/"
+		backups := []string{}
+		for volumeName, volumeInfo := range m.volumeInfos {
+			path := getVolumePath(volumeName)
+			if !strings.HasPrefix(listPath, path) {
+				continue
+			}
+
+			for backup := range volumeInfo.Backups {
+				backups = append(backups, backup)
+			}
+			return backups, nil
+		}
 	}
 	return nil, nil
 }
 
 func (m *mockStoreDriver) FileExists(filePath string) bool {
-	for _, path := range m.volumePaths {
-		// the filePath format is "backupstore/volumes/xx/yy/pvc-zzz/volume.cfg"
-		if strings.HasPrefix(filePath, path) {
-			return true
-		}
-	}
-	return false
+	return true
 }
 
 func (m *mockStoreDriver) FileSize(filePath string) int64 {
@@ -122,11 +152,31 @@ func (m *mockStoreDriver) Remove(path string) error {
 func (m *mockStoreDriver) Read(src string) (io.ReadCloser, error) {
 	defer time.Sleep(m.delay)
 
-	// parse the src that the format is "backupstore/volumes/xx/yy/pvc-zzz/volume.cfg"
-	ss := strings.Split(strings.TrimSuffix(src, VOLUME_CONFIG_FILE), "/")
-	name := ss[len(ss)-2]
-	return ioutil.NopCloser(
-		bytes.NewReader([]byte(fmt.Sprintf(`{"Name":"%s"}`, name)))), nil
+	for volumeName, volumeInfo := range m.volumeInfos {
+		path := getVolumePath(volumeName)
+		if !strings.HasPrefix(src, path) {
+			continue
+		}
+		if !strings.HasSuffix(src, CFG_SUFFIX) {
+			continue
+		}
+
+		if strings.Contains(src, VOLUME_CONFIG_FILE) {
+			// read volume.cfg
+			return ioutil.NopCloser(
+				bytes.NewReader([]byte(fmt.Sprintf(`{"Name":"%s"}`, volumeName)))), nil
+		} else if strings.Contains(src, BACKUP_CONFIG_PREFIX) {
+			// read backup_backup-xxx.cfg
+			for backupName := range volumeInfo.Backups {
+				if strings.Contains(src, backupName) {
+					return ioutil.NopCloser(
+						bytes.NewReader([]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backupName, time.Now().String())))), nil
+				}
+			}
+		}
+	}
+
+	return ioutil.NopCloser(bytes.NewReader([]byte(""))), nil
 }
 
 func (m *mockStoreDriver) Write(dst string, rs io.ReadSeeker) error {
@@ -141,22 +191,45 @@ func (m *mockStoreDriver) Download(src, dst string) error {
 	return nil
 }
 
-func TestList(t *testing.T) {
+func TestListAllVolumeOnly(t *testing.T) {
 	assert := assert.New(t)
 	m := &mockStoreDriver{
 		numOfVolumes: 4,
 		delay:        time.Millisecond,
 	}
 	m.Init()
-	initFunc := func(destURL string) (BackupStoreDriver, error) {
+	err := RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
 		m.destURL = destURL
 		return m, nil
-	}
-	_ = RegisterDriver("mock", initFunc)
+	})
+	assert.NoError(err)
+	defer unregisterDriver(mockDriverName)
 
-	volumeInfo, err := List("", "mock://localhost", true)
+	volumeInfo, err := List("", mockDriverURL, true)
 	assert.NoError(err)
 	assert.Equal(m.numOfVolumes, len(volumeInfo))
+}
+
+func TestListSingleVolumeBackups(t *testing.T) {
+	assert := assert.New(t)
+	m := &mockStoreDriver{
+		numOfVolumes: 1,
+		numOfBackups: 100,
+		delay:        time.Millisecond,
+	}
+	m.Init()
+	err := RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	})
+	assert.NoError(err)
+	defer unregisterDriver(mockDriverName)
+
+	for volumeName := range m.volumeInfos {
+		volumeInfo, err := List(volumeName, mockDriverURL, false)
+		assert.NoError(err)
+		assert.Equal(m.numOfBackups, len(volumeInfo[volumeName].Backups))
+	}
 }
 
 func BenchmarkListAllVolumeOnly10ms32volumes(b *testing.B) {
