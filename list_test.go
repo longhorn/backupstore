@@ -238,14 +238,14 @@ func BenchmarkListAllVolumeOnly10ms32volumes(b *testing.B) {
 		delay:        10 * time.Millisecond,
 	}
 	m.Init()
-	initFunc := func(destURL string) (BackupStoreDriver, error) {
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
 		m.destURL = destURL
 		return m, nil
-	}
-	_ = RegisterDriver("mock", initFunc)
+	})
+	defer unregisterDriver(mockDriverName)
 
 	for i := 0; i < b.N; i++ {
-		_, _ = List("", "mock://localhost", true)
+		List("", mockDriverURL, true)
 	}
 }
 
@@ -255,14 +255,14 @@ func BenchmarkListAllVolumeOnly100ms32volumes(b *testing.B) {
 		delay:        100 * time.Millisecond,
 	}
 	m.Init()
-	initFunc := func(destURL string) (BackupStoreDriver, error) {
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
 		m.destURL = destURL
 		return m, nil
-	}
-	_ = RegisterDriver("mock", initFunc)
+	})
+	defer unregisterDriver(mockDriverName)
 
 	for i := 0; i < b.N; i++ {
-		_, _ = List("", "mock://localhost", true)
+		List("", mockDriverURL, true)
 	}
 }
 
@@ -272,14 +272,14 @@ func BenchmarkListAllVolumeOnly250ms32volumes(b *testing.B) {
 		delay:        250 * time.Millisecond,
 	}
 	m.Init()
-	initFunc := func(destURL string) (BackupStoreDriver, error) {
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
 		m.destURL = destURL
 		return m, nil
-	}
-	_ = RegisterDriver("mock", initFunc)
+	})
+	defer unregisterDriver(mockDriverName)
 
 	for i := 0; i < b.N; i++ {
-		_, _ = List("", "mock://localhost", true)
+		List("", mockDriverURL, true)
 	}
 }
 
@@ -289,13 +289,93 @@ func BenchmarkListAllVolumeOnly500ms32volumes(b *testing.B) {
 		delay:        500 * time.Millisecond,
 	}
 	m.Init()
-	initFunc := func(destURL string) (BackupStoreDriver, error) {
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
 		m.destURL = destURL
 		return m, nil
-	}
-	_ = RegisterDriver("mock", initFunc)
+	})
+	defer unregisterDriver(mockDriverName)
 
 	for i := 0; i < b.N; i++ {
-		_, _ = List("", "mock://localhost", true)
+		List("", mockDriverURL, true)
+	}
+}
+
+func BenchmarkListSingleVolumeBackups10ms(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 1,
+		numOfBackups: 50,
+		delay:        10 * time.Millisecond,
+	}
+	m.Init()
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	})
+	defer unregisterDriver(mockDriverName)
+
+	for i := 0; i < b.N; i++ {
+		for volumeName := range m.volumeInfos {
+			List(volumeName, mockDriverURL, false)
+		}
+	}
+}
+
+func BenchmarkListSingleVolumeBackups100ms(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 1,
+		numOfBackups: 50,
+		delay:        100 * time.Millisecond,
+	}
+	m.Init()
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	})
+	defer unregisterDriver(mockDriverName)
+
+	for i := 0; i < b.N; i++ {
+		for volumeName := range m.volumeInfos {
+			List(volumeName, mockDriverURL, false)
+		}
+	}
+}
+
+func BenchmarkListSingleVolumeBackups250ms(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 1,
+		numOfBackups: 50,
+		delay:        250 * time.Millisecond,
+	}
+	m.Init()
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	})
+	defer unregisterDriver(mockDriverName)
+
+	for i := 0; i < b.N; i++ {
+		for volumeName := range m.volumeInfos {
+			List(volumeName, mockDriverURL, false)
+		}
+	}
+}
+
+func BenchmarkListSingleVolumeBackups500ms(b *testing.B) {
+	m := &mockStoreDriver{
+		numOfVolumes: 1,
+		numOfBackups: 50,
+		delay:        500 * time.Millisecond,
+	}
+	m.Init()
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
+		m.destURL = destURL
+		return m, nil
+	})
+	defer unregisterDriver(mockDriverName)
+
+	for i := 0; i < b.N; i++ {
+		for volumeName := range m.volumeInfos {
+			List(volumeName, mockDriverURL, false)
+		}
 	}
 }
