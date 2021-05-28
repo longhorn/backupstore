@@ -26,9 +26,9 @@ const (
 	volumeName2       = "BackupStoreExtraTestVolume"
 	volumeContentSize = int64(5 * 2 * 1024 * 1024)       // snapshotCounts number of blocks
 	volumeSize        = int64((5 + 4) * 2 * 1024 * 1024) // snapshotCounts number of blocks + intended empty block
-	snapPrefix        = "volume_snap"
-	snapshotCounts    = 5
-	snapIncrePreifix  = "restore-snap-"
+	// snapPrefix        = "volume_snap"
+	snapshotCounts   = 5
+	snapIncrePreifix = "restore-snap-"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -311,7 +311,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		s.randomChange(data, int64(i)*blockSize, 10)
 	}
 
-	backup0 := ""
+	backupN := ""
 	for i := 0; i < snapshotCounts; i++ {
 		config := &backupstore.DeltaBackupConfig{
 			Volume:   &volume.v,
@@ -324,8 +324,8 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 			},
 		}
 		backup := s.createAndWaitForBackup(c, config, &volume)
-		if i == 0 {
-			backup0 = backup
+		if i == snapshotCounts-1 {
+			backupN = backup
 		}
 
 		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
@@ -341,54 +341,60 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		err = exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
 		c.Assert(err, IsNil)
 
+		// inspect the historical backup metadata
+		backupName, volumeName, _, err := backupstore.DecodeMetadataURL(backup)
+		c.Assert(err, IsNil)
 		backupInfo, err := backupstore.InspectBackup(backup)
 		c.Assert(err, IsNil)
-
+		c.Assert(backupInfo.Name, Equals, backupName)
 		c.Assert(backupInfo.URL, Equals, backup)
 		c.Assert(backupInfo.SnapshotName, Equals, volume.Snapshots[i].Name)
 		c.Assert(backupInfo.SnapshotCreated, Equals, volume.Snapshots[i].CreatedTime)
 		c.Assert(backupInfo.Created, Not(Equals), "")
 		c.Assert(backupInfo.Size, Equals, volumeContentSize)
+		c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
+		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
+		if i == 0 {
+			c.Assert(backupInfo.IsIncremental, Equals, false)
+		} else {
+			c.Assert(backupInfo.IsIncremental, Equals, true)
+		}
 		c.Assert(backupInfo.VolumeName, Equals, volumeName)
 		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
 		c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
-		c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
-		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
+		c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
+		c.Assert(backupInfo.VolumeBackingImageURL, Equals, "")
 	}
 
-	listInfo, err := backupstore.List(volume.v.Name, s.getDestURL(), false)
+	// list backup volume names only
+	listName, err := backupstore.List(volume.v.Name, s.getDestURL(), true)
 	c.Assert(err, IsNil)
-	c.Assert(len(listInfo), Equals, 1)
-	volumeInfo, ok := listInfo[volume.v.Name]
+	c.Assert(len(listName), Equals, 1)
+	volumeName, ok := listName[volume.v.Name]
 	c.Assert(ok, Equals, true)
+	c.Assert(len(volumeName.Backups), Equals, 0)
+
+	// list backup volume name and it's historical backups
+	listName, err = backupstore.List(volume.v.Name, s.getDestURL(), false)
+	c.Assert(err, IsNil)
+	c.Assert(len(listName), Equals, 1)
+	volumeName, ok = listName[volume.v.Name]
+	c.Assert(ok, Equals, true)
+	c.Assert(len(volumeName.Backups), Equals, snapshotCounts)
+
+	// inspect backup volume metadata
+	volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeMetadataURL("", volume.v.Name, s.getDestURL()))
+	c.Assert(err, IsNil)
 	c.Assert(volumeInfo.Name, Equals, volume.v.Name)
 	c.Assert(volumeInfo.Size, Equals, volumeSize)
 	c.Assert(volumeInfo.Created, Equals, volume.v.CreatedTime)
 	c.Assert(volumeInfo.DataStored, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
-	c.Assert(len(volumeInfo.Backups), Equals, snapshotCounts)
-
-	backupInfo0, ok := volumeInfo.Backups[backup0]
-	c.Assert(backupInfo0.URL, Equals, backup0)
-	c.Assert(backupInfo0.SnapshotName, Equals, volume.Snapshots[0].Name)
-	c.Assert(backupInfo0.SnapshotCreated, Equals, volume.Snapshots[0].CreatedTime)
-	c.Assert(backupInfo0.Created, Not(Equals), "")
-	c.Assert(backupInfo0.Size, Equals, volumeContentSize)
-	//Because it's in volume list so volume specific details are omitted
-	c.Assert(backupInfo0.VolumeName, Equals, "")
-	c.Assert(backupInfo0.VolumeSize, Equals, int64(0))
-	c.Assert(backupInfo0.VolumeCreated, Equals, "")
-	c.Assert(backupInfo0.Labels["SnapshotName"], Equals, volume.Snapshots[0].Name)
-	c.Assert(backupInfo0.Labels["RandomKey"], Equals, "RandomValue")
-
-	volumeList, err := backupstore.List(volume.v.Name, s.getDestURL(), true)
+	backupName, _, _, err := backupstore.DecodeMetadataURL(backupN)
 	c.Assert(err, IsNil)
-	c.Assert(len(volumeList), Equals, 1)
-	volumeInfo, ok = volumeList[volume.v.Name]
-	c.Assert(ok, Equals, true)
-	c.Assert(volumeInfo.Name, Equals, volume.v.Name)
-	c.Assert(volumeInfo.Size, Equals, volumeSize)
-	c.Assert(volumeInfo.Created, Equals, volume.v.CreatedTime)
-	c.Assert(len(volumeInfo.Backups), Equals, 0)
+	c.Assert(volumeInfo.LastBackupName, Equals, backupName)
+	c.Assert(volumeInfo.LastBackupAt, Not(Equals), "")
+	c.Assert(volumeInfo.BackingImageName, Equals, "")
+	c.Assert(volumeInfo.BackingImageURL, Equals, "")
 }
 
 func (s *TestSuite) TestBackupRestoreExtra(c *C) {
@@ -566,7 +572,6 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		if i == 0 {
 			c.Assert(err, NotNil)
 			c.Assert(err, ErrorMatches, "invalid parameter lastBackupName "+lastBackupName)
-
 		} else {
 			c.Assert(err, IsNil)
 
@@ -580,15 +585,21 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		backupInfo, err := backupstore.InspectBackup(backup)
 		c.Assert(err, IsNil)
 		lastBackupName = backupInfo.Name
-
 		c.Assert(backupInfo.URL, Equals, backup)
 		c.Assert(backupInfo.SnapshotName, Equals, volume.Snapshots[i].Name)
 		c.Assert(backupInfo.SnapshotCreated, Equals, volume.Snapshots[i].CreatedTime)
 		c.Assert(backupInfo.Created, Not(Equals), "")
+		c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
+		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
+		if i == 0 {
+			c.Assert(backupInfo.IsIncremental, Equals, false)
+		} else {
+			c.Assert(backupInfo.IsIncremental, Equals, true)
+		}
 		c.Assert(backupInfo.VolumeName, Equals, volumeName2)
 		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
 		c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
-		c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
-		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
+		c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
+		c.Assert(backupInfo.VolumeBackingImageURL, Equals, "")
 	}
 }
