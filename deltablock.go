@@ -333,7 +333,7 @@ func performBackup(config *DeltaBackupConfig, delta *Mappings, deltaBackup *Back
 		return progress, "", err
 	}
 
-	return PROGRESS_PERCENTAGE_BACKUP_TOTAL, encodeBackupURL(backup.Name, volume.Name, destURL), nil
+	return PROGRESS_PERCENTAGE_BACKUP_TOTAL, EncodeMetadataURL(backup.Name, volume.Name, destURL), nil
 }
 
 func mergeSnapshotMap(deltaBackup, lastBackup *Backup) *Backup {
@@ -396,7 +396,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		return err
 	}
 
-	srcBackupName, srcVolumeName, err := decodeBackupURL(backupURL)
+	srcBackupName, srcVolumeName, _, err := DecodeMetadataURL(backupURL)
 	if err != nil {
 		return err
 	}
@@ -537,7 +537,7 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 		return err
 	}
 
-	srcBackupName, srcVolumeName, err := decodeBackupURL(backupURL)
+	srcBackupName, srcVolumeName, _, err := DecodeMetadataURL(backupURL)
 	if err != nil {
 		return err
 	}
@@ -765,7 +765,7 @@ func DeleteDeltaBlockBackup(backupURL string) error {
 		return err
 	}
 
-	backupName, volumeName, err := decodeBackupURL(backupURL)
+	backupName, volumeName, _, err := DecodeMetadataURL(backupURL)
 	if err != nil {
 		return err
 	}
