@@ -108,7 +108,6 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 				info = failedBackupInfo(backupName, volumeName, driver.GetURL(), err)
 			} else if isBackupInProgress(backup) {
 				// for now we don't return in progress backups to the ui
-				return nil, fmt.Errorf("backup %v is still in progress", backup.Name)
 			} else {
 				info = fillBackupInfo(backup, driver.GetURL())
 			}
@@ -119,12 +118,11 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 	}
 
 	for _, tracker := range trackers {
-		payload, err := tracker.Result()
-		if err != nil {
-			continue
-		}
+		payload, _ := tracker.Result()
 		info := payload.(*BackupInfo)
-		volumeInfo.Backups[info.URL] = info
+		if info != nil {
+			volumeInfo.Backups[info.URL] = info
+		}
 	}
 	return volumeInfo, nil
 }
