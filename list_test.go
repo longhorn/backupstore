@@ -244,6 +244,14 @@ func TestListSingleVolumeBackups(t *testing.T) {
 		volumeInfo, err := List(volumeName, mockDriverURL, false)
 		assert.NoError(err)
 		assert.Equal(m.numOfBackups-m.numOfInProgressBackups, len(volumeInfo[volumeName].Backups))
+
+		faultyBackups := 0
+		for _, backup := range volumeInfo[volumeName].Backups {
+			if len(backup.Messages) > 0 {
+				faultyBackups++
+			}
+		}
+		assert.Equal(m.numOfFaultyBackups, faultyBackups)
 	}
 }
 
