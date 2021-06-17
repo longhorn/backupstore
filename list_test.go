@@ -19,11 +19,13 @@ const (
 )
 
 type mockStoreDriver struct {
-	destURL      string
-	delay        time.Duration
-	numOfVolumes int
-	numOfBackups int
-	volumeInfos  map[string]*VolumeInfo
+	destURL                string
+	delay                  time.Duration
+	numOfVolumes           int
+	numOfBackups           int
+	numOfFaultyBackups     int
+	numOfInProgressBackups int
+	volumeInfos            map[string]*VolumeInfo
 }
 
 func (m *mockStoreDriver) Init() {
@@ -50,7 +52,14 @@ func (m *mockStoreDriver) Init() {
 				backup[i] = letterRunes[rand.Intn(len(letterRunes))]
 			}
 			backupName := fmt.Sprintf("backup_backup-%s.cfg", string(backup))
-			backups[backupName] = &BackupInfo{Name: backupName}
+			if j < m.numOfFaultyBackups {
+				backups[backupName] = nil
+			} else if j < (m.numOfFaultyBackups + m.numOfInProgressBackups) {
+				// generate a backup in progress state
+				backups[backupName] = &BackupInfo{Name: backupName}
+			} else {
+				backups[backupName] = &BackupInfo{Name: backupName, Created: time.Now().String()}
+			}
 		}
 
 		m.volumeInfos[volumeName] = &VolumeInfo{Name: volumeName, Backups: backups}
@@ -167,11 +176,15 @@ func (m *mockStoreDriver) Read(src string) (io.ReadCloser, error) {
 				bytes.NewReader([]byte(fmt.Sprintf(`{"Name":"%s"}`, volumeName)))), nil
 		} else if strings.Contains(src, BACKUP_CONFIG_PREFIX) {
 			// read backup_backup-xxx.cfg
-			for backupName := range volumeInfo.Backups {
-				if strings.Contains(src, backupName) {
-					return ioutil.NopCloser(
-						bytes.NewReader([]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backupName, time.Now().String())))), nil
+			for backupName, backup := range volumeInfo.Backups {
+				if !strings.Contains(src, backupName) {
+					continue
 				}
+				if backup == nil {
+					return ioutil.NopCloser(bytes.NewReader([]byte(""))), fmt.Errorf("not found")
+				}
+				return ioutil.NopCloser(
+					bytes.NewReader([]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backup.Name, backup.Created)))), nil
 			}
 		}
 	}
@@ -213,9 +226,11 @@ func TestListAllVolumeOnly(t *testing.T) {
 func TestListSingleVolumeBackups(t *testing.T) {
 	assert := assert.New(t)
 	m := &mockStoreDriver{
-		numOfVolumes: 1,
-		numOfBackups: 100,
-		delay:        time.Millisecond,
+		numOfVolumes:           1,
+		numOfBackups:           100,
+		numOfFaultyBackups:     3,
+		numOfInProgressBackups: 2,
+		delay:                  time.Millisecond,
 	}
 	m.Init()
 	err := RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
@@ -228,7 +243,7 @@ func TestListSingleVolumeBackups(t *testing.T) {
 	for volumeName := range m.volumeInfos {
 		volumeInfo, err := List(volumeName, mockDriverURL, false)
 		assert.NoError(err)
-		assert.Equal(m.numOfBackups, len(volumeInfo[volumeName].Backups))
+		assert.Equal(m.numOfBackups-m.numOfInProgressBackups, len(volumeInfo[volumeName].Backups))
 	}
 }
 
