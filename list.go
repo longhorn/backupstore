@@ -108,7 +108,7 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 				info = failedBackupInfo(backupName, volumeName, driver.GetURL(), err)
 			} else if isBackupInProgress(backup) {
 				// for now we don't return in progress backups to the ui
-				return nil, fmt.Errorf("Backup in progress")
+				return nil, fmt.Errorf("backup %v is still in progress", backup.Name)
 			} else {
 				info = fillBackupInfo(backup, driver.GetURL())
 			}
