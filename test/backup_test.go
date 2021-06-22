@@ -236,8 +236,13 @@ func (s *TestSuite) getDestURL() string {
 }
 
 func (s *TestSuite) createAndWaitForBackup(c *C, config *backupstore.DeltaBackupConfig, deltaOps *RawFileVolume) string {
-	_, _, err := backupstore.CreateDeltaBlockBackup(config)
+	backupName, _, err := backupstore.CreateDeltaBlockBackup(config)
 	c.Assert(err, IsNil)
+	if config.BackupName != "" {
+		c.Assert(backupName, Equals, config.BackupName)
+	} else {
+		c.Assert(backupName, Not(Equals), "")
+	}
 
 	retryCount := 120
 	var bError, bURL string
@@ -314,10 +319,11 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	backupN := ""
 	for i := 0; i < snapshotCounts; i++ {
 		config := &backupstore.DeltaBackupConfig{
-			Volume:   &volume.v,
-			Snapshot: &volume.Snapshots[i],
-			DestURL:  s.getDestURL(),
-			DeltaOps: &volume,
+			BackupName: util.GenerateName("backup"),
+			Volume:     &volume.v,
+			Snapshot:   &volume.Snapshots[i],
+			DestURL:    s.getDestURL(),
+			DeltaOps:   &volume,
 			Labels: map[string]string{
 				"SnapshotName": volume.Snapshots[i].Name,
 				"RandomKey":    "RandomValue",

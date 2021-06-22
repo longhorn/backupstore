@@ -14,11 +14,12 @@ import (
 )
 
 type DeltaBackupConfig struct {
-	Volume   *Volume
-	Snapshot *Snapshot
-	DestURL  string
-	DeltaOps DeltaBlockBackupOperations
-	Labels   map[string]string
+	BackupName string
+	Volume     *Volume
+	Snapshot   *Snapshot
+	DestURL    string
+	DeltaOps   DeltaBlockBackupOperations
+	Labels     map[string]string
 }
 
 type DeltaRestoreConfig struct {
@@ -206,8 +207,13 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 		LogFieldSnapshot:   snapshot.Name,
 	}).Debug("Creating backup")
 
+	backupName := config.BackupName
+	if backupName == "" {
+		backupName = util.GenerateName("backup")
+	}
+
 	deltaBackup := &Backup{
-		Name:         util.GenerateName("backup"),
+		Name:         backupName,
 		VolumeName:   volume.Name,
 		SnapshotName: snapshot.Name,
 		Blocks:       []BlockMapping{},
