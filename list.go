@@ -58,7 +58,15 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 		return nil, fmt.Errorf("Invalid volume name %v", volumeName)
 	}
 
-	volumeInfo := &VolumeInfo{}
+	volumeInfo := &VolumeInfo{
+		Messages: make(map[MessageType]string),
+		Backups:  make(map[string]*BackupInfo),
+	}
+	if !volumeExists(volumeName, driver) {
+		volumeInfo.Messages[MessageTypeError] = "cannot find backup volume info in backupstore"
+		return volumeInfo, nil
+	}
+
 	if volumeOnly {
 		return volumeInfo, nil
 	}
@@ -69,7 +77,6 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 		volumeInfo.Messages[MessageTypeError] = err.Error()
 		return volumeInfo, nil
 	}
-	volumeInfo.Backups = make(map[string]*BackupInfo)
 	for _, backupName := range backupNames {
 		volumeInfo.Backups[backupName] = &BackupInfo{}
 	}
