@@ -27,12 +27,14 @@ func TestEncodeAndDecodeMetadataURL(t *testing.T) {
 			expectMetadataURL: "s3://backupstore@minio/?backup=backup-2&volume=vol-2",
 		},
 		{
+			// Test invalid volume name
 			volumeName:        "-3-vol",
 			destURL:           "s3://backupstore@minio/",
 			expectDecodeError: true,
 			expectMetadataURL: "s3://backupstore@minio/?volume=-3-vol",
 		},
 		{
+			// Test invalid backup name
 			volumeName:        "vol-4",
 			backupName:        "-4-backup",
 			destURL:           "s3://backupstore@minio/",
