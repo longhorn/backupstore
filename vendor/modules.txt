@@ -52,15 +52,21 @@ github.com/pmezard/go-difflib/difflib
 github.com/satori/go.uuid
 # github.com/sirupsen/logrus v1.3.0
 github.com/sirupsen/logrus
+# github.com/spf13/afero v1.6.0
+github.com/spf13/afero
+github.com/spf13/afero/mem
 # github.com/stretchr/testify v1.7.0
 github.com/stretchr/testify/assert
 # github.com/urfave/cli v1.14.0
 github.com/urfave/cli
-# golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+# golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
+# golang.org/x/sys v0.0.0-20190412213103-97732733099d
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+# golang.org/x/text v0.3.3
+golang.org/x/text/transform
+golang.org/x/text/unicode/norm
 # gopkg.in/check.v1 v1.0.0-20160105164936-4f90aeace3a2
 gopkg.in/check.v1
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
