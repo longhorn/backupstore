@@ -115,32 +115,6 @@ func (m *mockStoreDriver) Download(src, dst string) error {
 	return nil
 }
 
-func TestInvalidList(t *testing.T) {
-	assert := assert.New(t)
-
-	fs := afero.NewMemMapFs()
-	m := &mockStoreDriver{
-		fs:      fs,
-		delay:   time.Millisecond,
-		destURL: mockDriverURL,
-	}
-
-	// driver not register
-	_, err := List("", mockDriverURL, true)
-	assert.Error(err)
-
-	err = RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
-		return m, nil
-	})
-	assert.NoError(err)
-	defer unregisterDriver(mockDriverName)
-
-	// list folder backupstore/ only
-	fs.MkdirAll(backupstoreBase, 0755)
-	_, err = List("", mockDriverURL, true)
-	assert.Error(err)
-}
-
 func TestListBackupVolumeNames(t *testing.T) {
 	assert := assert.New(t)
 
@@ -201,42 +175,6 @@ func TestListBackupVolumeBackups(t *testing.T) {
 	assert.Equal(1, len(volumeInfo))
 	assert.Equal(0, len(volumeInfo["pvc-1"].Messages))
 	assert.Equal(100, len(volumeInfo["pvc-1"].Backups))
-}
-
-func TestInvalidInspect(t *testing.T) {
-	assert := assert.New(t)
-
-	fs := afero.NewMemMapFs()
-	m := &mockStoreDriver{
-		fs:      fs,
-		delay:   time.Millisecond,
-		destURL: mockDriverURL,
-	}
-
-	// driver not register
-	volumeURL := EncodeMetadataURL("", "pvc-1", mockDriverURL)
-	_, err := InspectVolume(volumeURL)
-	assert.Error(err)
-
-	backupURL := EncodeMetadataURL("backup-1", "pvc-1", mockDriverURL)
-	_, err = InspectBackup(backupURL)
-	assert.Error(err)
-
-	err = RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
-		return m, nil
-	})
-	assert.NoError(err)
-	defer unregisterDriver(mockDriverName)
-
-	// invalid volume name
-	volumeURL = EncodeMetadataURL("", "-pvc-1", mockDriverURL)
-	_, err = InspectVolume(volumeURL)
-	assert.Error(err)
-
-	// invalid backup name
-	backupURL = EncodeMetadataURL("-backup-1", "pvc-1", mockDriverURL)
-	_, err = InspectBackup(backupURL)
-	assert.Error(err)
 }
 
 func TestInspectVolume(t *testing.T) {
