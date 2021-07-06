@@ -369,7 +369,6 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
 		c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
 		c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
-		c.Assert(backupInfo.VolumeBackingImageURL, Equals, "")
 	}
 
 	// list backup volume names only
@@ -400,7 +399,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(volumeInfo.LastBackupName, Equals, backupName)
 	c.Assert(volumeInfo.LastBackupAt, Not(Equals), "")
 	c.Assert(volumeInfo.BackingImageName, Equals, "")
-	c.Assert(volumeInfo.BackingImageURL, Equals, "")
+	c.Assert(volumeInfo.BackingImageChecksum, Equals, "")
 }
 
 func (s *TestSuite) TestBackupRestoreExtra(c *C) {
@@ -606,6 +605,5 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
 		c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
 		c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
-		c.Assert(backupInfo.VolumeBackingImageURL, Equals, "")
 	}
 }
