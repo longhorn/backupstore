@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.25.16
 	github.com/honestbee/jobq v1.0.2
 	github.com/pkg/errors v0.9.1
-	github.com/satori/go.uuid v0.0.0-20151028231719-d41af8bb6a77
+	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.3.0
 	github.com/spf13/afero v1.6.0
 	github.com/stretchr/testify v1.7.0
