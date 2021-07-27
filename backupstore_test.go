@@ -7,38 +7,38 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEncodeAndDecodeMetadataURL(t *testing.T) {
+func TestEncodeAndDecodeConfigURL(t *testing.T) {
 	testCases := []struct {
 		volumeName        string
 		backupName        string
 		destURL           string
 		expectDecodeError bool
-		expectMetadataURL string
+		expectConfigURL   string
 	}{
 		{
-			volumeName:        "vol-1",
-			destURL:           "s3://backupstore@minio/",
-			expectMetadataURL: "s3://backupstore@minio/?volume=vol-1",
+			volumeName:      "vol-1",
+			destURL:         "s3://backupstore@minio/",
+			expectConfigURL: "s3://backupstore@minio/?volume=vol-1",
 		},
 		{
-			volumeName:        "vol-2",
-			backupName:        "backup-2",
-			destURL:           "s3://backupstore@minio/",
-			expectMetadataURL: "s3://backupstore@minio/?backup=backup-2&volume=vol-2",
+			volumeName:      "vol-2",
+			backupName:      "backup-2",
+			destURL:         "s3://backupstore@minio/",
+			expectConfigURL: "s3://backupstore@minio/?backup=backup-2&volume=vol-2",
 		},
 		{
 			// Test invalid volume name
 			volumeName:        "-3-vol",
 			destURL:           "s3://backupstore@minio/",
 			expectDecodeError: true,
-			expectMetadataURL: "s3://backupstore@minio/?volume=-3-vol",
+			expectConfigURL:   "s3://backupstore@minio/?volume=-3-vol",
 		},
 		{
 			// Test invalid backup name
 			volumeName:        "vol-4",
 			backupName:        "-4-backup",
 			destURL:           "s3://backupstore@minio/",
-			expectMetadataURL: "s3://backupstore@minio/?backup=-4-backup&volume=vol-4",
+			expectConfigURL:   "s3://backupstore@minio/?backup=-4-backup&volume=vol-4",
 			expectDecodeError: true,
 		},
 	}
@@ -47,10 +47,10 @@ func TestEncodeAndDecodeMetadataURL(t *testing.T) {
 		t.Run(fmt.Sprintf("%s%s&%s", tc.destURL, tc.backupName, tc.volumeName), func(t *testing.T) {
 			assert := assert.New(t)
 
-			gotMetadataURL := EncodeMetadataURL(tc.backupName, tc.volumeName, tc.destURL)
-			assert.Equal(gotMetadataURL, tc.expectMetadataURL)
+			gotConfigURL := EncodeConfigURL(tc.backupName, tc.volumeName, tc.destURL)
+			assert.Equal(gotConfigURL, tc.expectConfigURL)
 
-			backupName, volumeName, destURL, err := DecodeMetadataURL(gotMetadataURL)
+			backupName, volumeName, destURL, err := DecodeConfigURL(gotConfigURL)
 			if tc.expectDecodeError {
 				assert.NotNil(err)
 			} else {
