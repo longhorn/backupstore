@@ -347,8 +347,8 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		err = exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
 		c.Assert(err, IsNil)
 
-		// inspect the historical backup metadata
-		backupName, volumeName, _, err := backupstore.DecodeMetadataURL(backup)
+		// inspect the backup config
+		backupName, volumeName, _, err := backupstore.DecodeConfigURL(backup)
 		c.Assert(err, IsNil)
 		backupInfo, err := backupstore.InspectBackup(backup)
 		c.Assert(err, IsNil)
@@ -379,7 +379,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(len(volumeName.Backups), Equals, 0)
 
-	// list backup volume name and it's historical backups
+	// list backup volume name and it's backups
 	listName, err = backupstore.List(volume.v.Name, s.getDestURL(), false)
 	c.Assert(err, IsNil)
 	c.Assert(len(listName), Equals, 1)
@@ -387,14 +387,14 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(len(volumeName.Backups), Equals, snapshotCounts)
 
-	// inspect backup volume metadata
-	volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeMetadataURL("", volume.v.Name, s.getDestURL()))
+	// inspect backup volume config
+	volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeConfigURL("", volume.v.Name, s.getDestURL()))
 	c.Assert(err, IsNil)
 	c.Assert(volumeInfo.Name, Equals, volume.v.Name)
 	c.Assert(volumeInfo.Size, Equals, volumeSize)
 	c.Assert(volumeInfo.Created, Equals, volume.v.CreatedTime)
 	c.Assert(volumeInfo.DataStored, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
-	backupName, _, _, err := backupstore.DecodeMetadataURL(backupN)
+	backupName, _, _, err := backupstore.DecodeConfigURL(backupN)
 	c.Assert(err, IsNil)
 	c.Assert(volumeInfo.LastBackupName, Equals, backupName)
 	c.Assert(volumeInfo.LastBackupAt, Not(Equals), "")
