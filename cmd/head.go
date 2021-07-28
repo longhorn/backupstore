@@ -11,9 +11,10 @@ import (
 
 func GetConfigMetadataCmd() cli.Command {
 	return cli.Command{
-		Name:   "head",
-		Usage:  "get the config metadata",
-		Action: cmdGetConfigMetadata,
+		Name:        "head",
+		Usage:       "get the config metadata",
+		Description: "this returns the last modification time of a config file for now",
+		Action:      cmdGetConfigMetadata,
 	}
 }
 
