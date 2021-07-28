@@ -348,7 +348,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		c.Assert(err, IsNil)
 
 		// inspect the backup config
-		backupName, volumeName, _, err := backupstore.DecodeConfigURL(backup)
+		backupName, volumeName, _, err := backupstore.DecodeBackupURL(backup)
 		c.Assert(err, IsNil)
 		backupInfo, err := backupstore.InspectBackup(backup)
 		c.Assert(err, IsNil)
@@ -388,13 +388,13 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 	c.Assert(len(volumeName.Backups), Equals, snapshotCounts)
 
 	// inspect backup volume config
-	volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeConfigURL("", volume.v.Name, s.getDestURL()))
+	volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeBackupURL("", volume.v.Name, s.getDestURL()))
 	c.Assert(err, IsNil)
 	c.Assert(volumeInfo.Name, Equals, volume.v.Name)
 	c.Assert(volumeInfo.Size, Equals, volumeSize)
 	c.Assert(volumeInfo.Created, Equals, volume.v.CreatedTime)
 	c.Assert(volumeInfo.DataStored, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
-	backupName, _, _, err := backupstore.DecodeConfigURL(backupN)
+	backupName, _, _, err := backupstore.DecodeBackupURL(backupN)
 	c.Assert(err, IsNil)
 	c.Assert(volumeInfo.LastBackupName, Equals, backupName)
 	c.Assert(volumeInfo.LastBackupAt, Not(Equals), "")

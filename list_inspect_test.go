@@ -187,7 +187,7 @@ func TestInspectVolume(t *testing.T) {
 	// create pvc-1 folder and config
 	m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
 
-	volumeURL := EncodeConfigURL("", "pvc-1", mockDriverURL)
+	volumeURL := EncodeBackupURL("", "pvc-1", mockDriverURL)
 	volumeInfo, err := InspectVolume(volumeURL)
 	assert.Error(err)
 	assert.Nil(volumeInfo)
@@ -197,7 +197,7 @@ func TestInspectVolume(t *testing.T) {
 		[]byte(`{"Name":"pvc-1","Size":"2147483648","CreatedTime":"2021-05-12T00:52:01Z","LastBackupName":"backup-3","LastBackupAt":"2021-05-17T05:31:01Z"}`), 0644)
 
 	// inspect backup volume config
-	volumeURL = EncodeConfigURL("", "pvc-1", mockDriverURL)
+	volumeURL = EncodeBackupURL("", "pvc-1", mockDriverURL)
 	volumeInfo, err = InspectVolume(volumeURL)
 	assert.NoError(err)
 	assert.Equal(volumeInfo.Name, "pvc-1")
@@ -217,7 +217,7 @@ func TestInspectBackup(t *testing.T) {
 	// create pvc-1 folder and config
 	m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
 
-	backupURL := EncodeConfigURL("backup-1", "pvc-1", mockDriverURL)
+	backupURL := EncodeBackupURL("backup-1", "pvc-1", mockDriverURL)
 	backupInfo, err := InspectBackup(backupURL)
 	assert.Error(err)
 	assert.Nil(backupInfo)

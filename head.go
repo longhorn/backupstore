@@ -15,7 +15,7 @@ func GetConfigMetadata(url string) (*ConfigMetadata, error) {
 		return nil, err
 	}
 
-	backupName, volumeName, _, err := DecodeConfigURL(url)
+	backupName, volumeName, _, err := DecodeBackupURL(url)
 	if err != nil {
 		return nil, err
 	}
