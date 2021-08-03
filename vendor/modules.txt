@@ -1,4 +1,5 @@
 # github.com/aws/aws-sdk-go v1.25.16
+## explicit
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/awserr
 github.com/aws/aws-sdk-go/aws/awsutil
@@ -39,35 +40,44 @@ github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/honestbee/jobq v1.0.2
+## explicit
 github.com/honestbee/jobq
 # github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 github.com/jmespath/go-jmespath
-# github.com/konsorten/go-windows-terminal-sequences v1.0.1
-github.com/konsorten/go-windows-terminal-sequences
 # github.com/pkg/errors v0.9.1
+## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/satori/go.uuid v1.2.0
+## explicit
 github.com/satori/go.uuid
-# github.com/sirupsen/logrus v1.3.0
+# github.com/sirupsen/logrus v1.8.1
+## explicit
 github.com/sirupsen/logrus
 # github.com/spf13/afero v1.6.0
+## explicit
 github.com/spf13/afero
 github.com/spf13/afero/mem
 # github.com/stretchr/testify v1.7.0
+## explicit
 github.com/stretchr/testify/assert
 # github.com/urfave/cli v1.14.0
+## explicit
 github.com/urfave/cli
-# golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
-golang.org/x/crypto/ssh/terminal
-# golang.org/x/sys v0.0.0-20190412213103-97732733099d
+# golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+## explicit
+# golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
+## explicit
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.3
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
 # gopkg.in/check.v1 v1.0.0-20160105164936-4f90aeace3a2
+## explicit
 gopkg.in/check.v1
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+## explicit
 gopkg.in/yaml.v3
