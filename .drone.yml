@@ -22,6 +22,18 @@ steps:
   - name: socket
     path: /var/run/docker.sock
 
+- name: security check
+  image: meldafrawi/fossa-cli:v1.1.10-golang1.16.6
+  environment:
+    FOSSA_API_KEY:
+      from_secret: fossa_api_key 
+  commands:
+  - fossa init --include-all --team Longhorn --project "${DRONE_GIT_HTTP_URL}" --title "${DRONE_REPO}"
+  - fossa test
+  volumes:
+  - name: socket
+    path: /var/run/docker.sock
+
 volumes:
 - name: socket
   host:
