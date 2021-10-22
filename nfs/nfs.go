@@ -97,7 +97,7 @@ func (b *BackupStoreDriver) mount() (err error) {
 		for _, version := range MinorVersions {
 			log.Debugf("attempting mount for nfs path %v with nfsvers %v", b.serverPath, version)
 			_, err = util.Execute("mount", []string{"-t", "nfs4", "-o", fmt.Sprintf("nfsvers=%v", version), "-o", "actimeo=1", b.serverPath, b.mountDir})
-			if err == nil || !strings.Contains(err.Error(), UnsupportedProtocolError) {
+			if err == nil {
 				break
 			}
 		}
