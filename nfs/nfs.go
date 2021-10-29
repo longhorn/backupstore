@@ -85,8 +85,7 @@ func (b *BackupStoreDriver) mount() (err error) {
 
 	defer func() {
 		if err != nil {
-			//err = errors.New(fmt.Sprintf("Cannot mount using NFSv4: %s", strings.Join(errs, ";")))
-			err = errors.New(fmt.Sprintf("Cannot mount using NFSv4: %s", errs, ";"))
+			err = errors.New(fmt.Sprintf("Cannot mount using NFSv4: %s", strings.Join(errs, ";")))
 		}
 	}()
 
