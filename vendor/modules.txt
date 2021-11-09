@@ -44,6 +44,8 @@ github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/google/uuid v1.3.0
+github.com/google/uuid
 # github.com/honestbee/jobq v1.0.2
 github.com/honestbee/jobq
 # github.com/jmespath/go-jmespath v0.3.0
@@ -54,8 +56,6 @@ github.com/konsorten/go-windows-terminal-sequences
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/satori/go.uuid v1.2.0
-github.com/satori/go.uuid
 # github.com/sirupsen/logrus v1.3.0
 github.com/sirupsen/logrus
 # github.com/spf13/afero v1.5.1
