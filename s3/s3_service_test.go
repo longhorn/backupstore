@@ -1,3 +1,4 @@
+//go:build s3test
 // +build s3test
 
 package s3
