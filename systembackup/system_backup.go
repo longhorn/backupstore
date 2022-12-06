@@ -24,6 +24,12 @@ const (
 	ZipFile    = "system-backup.zip"
 )
 
+type Name string
+
+type URI string
+
+type SystemBackups map[Name]URI
+
 type Config struct {
 	Name              string
 	LonghornVersion   string
@@ -92,18 +98,18 @@ func Download(localFilePath string, cfg *Config) error {
 	return nil
 }
 
-func List(destURL string) (map[string]string, error) {
+func List(destURL string) (SystemBackups, error) {
 	driver, err := backupstore.GetBackupStoreDriver(destURL)
 	if err != nil {
 		return nil, err
 	}
 
-	systemBackupNames, err := getSystemBackupNames(driver)
+	systemBackups, err := getSystemBackups(driver)
 	if err != nil {
 		return nil, err
 	}
 
-	return systemBackupNames, nil
+	return systemBackups, nil
 }
 
 func Delete(cfg *Config) error {
@@ -172,7 +178,7 @@ func getSystemBackupURI(name, longhornVersion string) string {
 		SubDirectory, longhornVersion, name) + "/"
 }
 
-func getSystemBackupNames(driver backupstore.BackupStoreDriver) (map[string]string, error) {
+func getSystemBackups(driver backupstore.BackupStoreDriver) (SystemBackups, error) {
 	systemBackupURI := filepath.Join(backupstore.GetBackupstoreBase(), SubDirectory)
 	lv1Dirs, err := driver.List(systemBackupURI)
 	if err != nil {
@@ -181,7 +187,7 @@ func getSystemBackupNames(driver backupstore.BackupStoreDriver) (map[string]stri
 	}
 
 	errs := []string{}
-	systemBackup := map[string]string{}
+	systemBackups := SystemBackups{}
 	for _, longhornVersion := range lv1Dirs {
 		path := filepath.Join(systemBackupURI, longhornVersion)
 		lv2Dirs, err := driver.List(path)
@@ -191,14 +197,14 @@ func getSystemBackupNames(driver backupstore.BackupStoreDriver) (map[string]stri
 		}
 
 		for _, name := range lv2Dirs {
-			systemBackup[name] = filepath.Join(path, name)
+			systemBackups[Name(name)] = URI(filepath.Join(path, name))
 		}
 	}
 
 	if len(errs) > 0 {
 		return nil, errors.New(strings.Join(errs, "\n"))
 	}
-	return systemBackup, nil
+	return systemBackups, nil
 }
 
 // ParseSystemBackupURL parse the URL and return backup target, version and name.
