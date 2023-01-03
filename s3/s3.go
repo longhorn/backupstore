@@ -114,7 +114,7 @@ func (s *BackupStoreDriver) List(listPath string) ([]string, error) {
 	path := s.updatePath(listPath) + "/"
 	contents, prefixes, err := s.service.ListObjects(path, "/")
 	if err != nil {
-		log.Error("Fail to list s3: ", err)
+		log.WithError(err).Error("Failed to list s3")
 		return result, err
 	}
 
