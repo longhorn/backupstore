@@ -49,7 +49,7 @@ type BackupInfo struct {
 	Messages map[MessageType]string
 }
 
-func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool) (*VolumeInfo, error) {
+func addListVolume(driver BackupStoreDriver, volumeName string, volumeOnly bool) (*VolumeInfo, error) {
 	if volumeName == "" {
 		return nil, fmt.Errorf("invalid empty volume Name")
 	}
@@ -59,7 +59,7 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 	}
 
 	volumeInfo := &VolumeInfo{Messages: make(map[MessageType]string)}
-	if !volumeExists(volumeName, driver) {
+	if !volumeExists(driver, volumeName) {
 		// If the backup volume folder exist but volume.cfg not exist
 		// save the error in Messages field
 		volumeInfo.Messages[MessageTypeError] = fmt.Sprintf("cannot find %v in backupstore", getVolumeFilePath(volumeName))
@@ -71,7 +71,7 @@ func addListVolume(volumeName string, driver BackupStoreDriver, volumeOnly bool)
 	}
 
 	// try to find all backups for this volume
-	backupNames, err := getBackupNamesForVolume(volumeName, driver)
+	backupNames, err := getBackupNamesForVolume(driver, volumeName)
 	if err != nil {
 		volumeInfo.Messages[MessageTypeError] = err.Error()
 		return volumeInfo, nil
@@ -108,7 +108,7 @@ func List(volumeName, destURL string, volumeOnly bool) (map[string]*VolumeInfo, 
 
 	var errs []string
 	for _, volumeName := range volumeNames {
-		volumeInfo, err := addListVolume(volumeName, driver, volumeOnly)
+		volumeInfo, err := addListVolume(driver, volumeName, volumeOnly)
 		if err != nil {
 			errs = append(errs, err.Error())
 			continue

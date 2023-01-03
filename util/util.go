@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	lz4 "github.com/pierrec/lz4/v4"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,6 +28,14 @@ const (
 var (
 	cmdTimeout = time.Minute // one minute by default
 )
+
+// NopCloser wraps an io.Witer as io.WriteCloser
+// with noop Close
+type NopCloser struct {
+	io.Writer
+}
+
+func (NopCloser) Close() error { return nil }
 
 func GenerateName(prefix string) string {
 	suffix := strings.Replace(NewUUID(), "-", "", -1)
@@ -58,19 +67,24 @@ func GetFileChecksum(filePath string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func CompressData(data []byte) (io.ReadSeeker, error) {
-	var b bytes.Buffer
-	w := gzip.NewWriter(&b)
+func CompressData(method string, data []byte) (io.ReadSeeker, error) {
+	var buffer bytes.Buffer
+
+	w, err := newCompressionWriter(method, &buffer)
+	if err != nil {
+		return nil, err
+	}
+
 	if _, err := w.Write(data); err != nil {
 		w.Close()
 		return nil, err
 	}
 	w.Close()
-	return bytes.NewReader(b.Bytes()), nil
+	return bytes.NewReader(buffer.Bytes()), nil
 }
 
-func DecompressAndVerify(src io.Reader, checksum string) (io.Reader, error) {
-	r, err := gzip.NewReader(src)
+func DecompressAndVerify(method string, src io.Reader, checksum string) (io.Reader, error) {
+	r, err := newDepcompressionReader(method, src)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +97,32 @@ func DecompressAndVerify(src io.Reader, checksum string) (io.Reader, error) {
 		return nil, fmt.Errorf("checksum verification failed for block")
 	}
 	return bytes.NewReader(block), nil
+}
+
+func newCompressionWriter(method string, buffer io.Writer) (io.WriteCloser, error) {
+	switch method {
+	case "none":
+		return NopCloser{buffer}, nil
+	case "gzip":
+		return gzip.NewWriter(buffer), nil
+	case "lz4":
+		return lz4.NewWriter(buffer), nil
+	default:
+		return nil, fmt.Errorf("unsupported compression method: %v", method)
+	}
+}
+
+func newDepcompressionReader(method string, r io.Reader) (io.ReadCloser, error) {
+	switch method {
+	case "none":
+		return ioutil.NopCloser(r), nil
+	case "gzip":
+		return gzip.NewReader(r)
+	case "lz4":
+		return ioutil.NopCloser(lz4.NewReader(r)), nil
+	default:
+		return nil, fmt.Errorf("unsupported compression method: %v", method)
+	}
 }
 
 func Now() string {

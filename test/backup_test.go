@@ -279,329 +279,342 @@ func (s *TestSuite) waitForRestoreCompletion(c *C, deltaOps *RawFileVolume) {
 }
 
 func (s *TestSuite) TestBackupBasic(c *C) {
-	// Make identical blocks in the file
-	data := make([]byte, volumeSize)
-	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
+	compressionMethods := []string{"none", "gzip", "lz4"}
 
-	for i := int64(0); i < blockSize; i++ {
-		data[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	for i := int64(1); i < volumeContentSize/blockSize; i++ {
-		for j := int64(0); j < blockSize; j++ {
-			data[i*blockSize+j] = data[j]
+	for _, compressionMethod := range compressionMethods {
+		volumeNameInTest := volumeName + "-" + compressionMethod
+
+		// Make identical blocks in the file
+		data := make([]byte, volumeSize)
+		blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
+
+		for i := int64(0); i < blockSize; i++ {
+			data[i] = letterBytes[rand.Intn(len(letterBytes))]
 		}
-	}
+		for i := int64(1); i < volumeContentSize/blockSize; i++ {
+			for j := int64(0); j < blockSize; j++ {
+				data[i*blockSize+j] = data[j]
+			}
+		}
 
-	volume := RawFileVolume{
-		v: backupstore.Volume{
-			Name:        volumeName,
-			Size:        volumeSize,
-			CreatedTime: util.Now(),
-		},
-	}
-	// Each snapshot will be one more block different from before
-	for i := 0; i < snapshotCounts; i++ {
-		snapName := s.getSnapshotName("snapshot-", i)
-		volume.Snapshots = append(volume.Snapshots,
-			backupstore.Snapshot{
-				Name:        snapName,
-				CreatedTime: util.Now(),
-			})
-
-		err := ioutil.WriteFile(snapName, data, 0600)
-		c.Assert(err, IsNil)
-
-		s.randomChange(data, int64(i)*blockSize, 10)
-	}
-
-	backupN := ""
-	for i := 0; i < snapshotCounts; i++ {
-		config := &backupstore.DeltaBackupConfig{
-			BackupName: util.GenerateName("backup"),
-			Volume:     &volume.v,
-			Snapshot:   &volume.Snapshots[i],
-			DestURL:    s.getDestURL(),
-			DeltaOps:   &volume,
-			Labels: map[string]string{
-				"SnapshotName": volume.Snapshots[i].Name,
-				"RandomKey":    "RandomValue",
+		volume := RawFileVolume{
+			v: backupstore.Volume{
+				Name:              volumeNameInTest,
+				Size:              volumeSize,
+				CreatedTime:       util.Now(),
+				CompressionMethod: compressionMethod,
 			},
 		}
-		backup := s.createAndWaitForBackup(c, config, &volume)
-		if i == snapshotCounts-1 {
-			backupN = backup
+		// Each snapshot will be one more block different from before
+		for i := 0; i < snapshotCounts; i++ {
+			snapName := s.getSnapshotName("snapshot-", i)
+			volume.Snapshots = append(volume.Snapshots,
+				backupstore.Snapshot{
+					Name:        snapName,
+					CreatedTime: util.Now(),
+				})
+
+			err := ioutil.WriteFile(snapName, data, 0600)
+			c.Assert(err, IsNil)
+
+			s.randomChange(data, int64(i)*blockSize, 10)
 		}
 
-		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
-		rConfig := &backupstore.DeltaRestoreConfig{
-			BackupURL: backup,
-			DeltaOps:  &volume,
-			Filename:  restore,
-		}
-		err := backupstore.RestoreDeltaBlockBackup(rConfig)
-		c.Assert(err, IsNil)
-		s.waitForRestoreCompletion(c, &volume)
+		backupN := ""
+		for i := 0; i < snapshotCounts; i++ {
+			config := &backupstore.DeltaBackupConfig{
+				BackupName: util.GenerateName("backup"),
+				Volume:     &volume.v,
+				Snapshot:   &volume.Snapshots[i],
+				DestURL:    s.getDestURL(),
+				DeltaOps:   &volume,
+				Labels: map[string]string{
+					"SnapshotName": volume.Snapshots[i].Name,
+					"RandomKey":    "RandomValue",
+				},
+			}
+			backup := s.createAndWaitForBackup(c, config, &volume)
+			if i == snapshotCounts-1 {
+				backupN = backup
+			}
 
-		err = exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
-		c.Assert(err, IsNil)
+			restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
+			rConfig := &backupstore.DeltaRestoreConfig{
+				BackupURL: backup,
+				DeltaOps:  &volume,
+				Filename:  restore,
+			}
+			err := backupstore.RestoreDeltaBlockBackup(rConfig)
+			c.Assert(err, IsNil)
+			s.waitForRestoreCompletion(c, &volume)
 
-		// inspect the backup config
-		backupName, volumeName, _, err := backupstore.DecodeBackupURL(backup)
-		c.Assert(err, IsNil)
-		backupInfo, err := backupstore.InspectBackup(backup)
-		c.Assert(err, IsNil)
-		c.Assert(backupInfo.Name, Equals, backupName)
-		c.Assert(backupInfo.URL, Equals, backup)
-		c.Assert(backupInfo.SnapshotName, Equals, volume.Snapshots[i].Name)
-		c.Assert(backupInfo.SnapshotCreated, Equals, volume.Snapshots[i].CreatedTime)
-		c.Assert(backupInfo.Created, Not(Equals), "")
-		c.Assert(backupInfo.Size, Equals, volumeContentSize)
-		c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
-		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
-		if i == 0 {
-			c.Assert(backupInfo.IsIncremental, Equals, false)
-		} else {
-			c.Assert(backupInfo.IsIncremental, Equals, true)
+			err = exec.Command("diff", volume.Snapshots[i].Name, restore).Run()
+			c.Assert(err, IsNil)
+
+			// inspect the backup config
+			backupName, volumeName, _, err := backupstore.DecodeBackupURL(backup)
+			c.Assert(err, IsNil)
+			backupInfo, err := backupstore.InspectBackup(backup)
+			c.Assert(err, IsNil)
+			c.Assert(backupInfo.Name, Equals, backupName)
+			c.Assert(backupInfo.URL, Equals, backup)
+			c.Assert(backupInfo.SnapshotName, Equals, volume.Snapshots[i].Name)
+			c.Assert(backupInfo.SnapshotCreated, Equals, volume.Snapshots[i].CreatedTime)
+			c.Assert(backupInfo.Created, Not(Equals), "")
+			c.Assert(backupInfo.Size, Equals, volumeContentSize)
+			c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
+			c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
+			if i == 0 {
+				c.Assert(backupInfo.IsIncremental, Equals, false)
+			} else {
+				c.Assert(backupInfo.IsIncremental, Equals, true)
+			}
+			c.Assert(backupInfo.VolumeName, Equals, volumeName)
+			c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
+			c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
+			c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
 		}
-		c.Assert(backupInfo.VolumeName, Equals, volumeName)
-		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
-		c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
-		c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
+
+		// list backup volume names only
+		listName, err := backupstore.List(volume.v.Name, s.getDestURL(), true)
+		c.Assert(err, IsNil)
+		c.Assert(len(listName), Equals, 1)
+		volumeName, ok := listName[volume.v.Name]
+		c.Assert(ok, Equals, true)
+		c.Assert(len(volumeName.Backups), Equals, 0)
+
+		// list backup volume name and it's backups
+		listName, err = backupstore.List(volume.v.Name, s.getDestURL(), false)
+		c.Assert(err, IsNil)
+		c.Assert(len(listName), Equals, 1)
+		volumeName, ok = listName[volume.v.Name]
+		c.Assert(ok, Equals, true)
+		c.Assert(len(volumeName.Backups), Equals, snapshotCounts)
+
+		// inspect backup volume config
+		volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeBackupURL("", volume.v.Name, s.getDestURL()))
+		c.Assert(err, IsNil)
+		c.Assert(volumeInfo.Name, Equals, volume.v.Name)
+		c.Assert(volumeInfo.Size, Equals, volumeSize)
+		c.Assert(volumeInfo.Created, Equals, volume.v.CreatedTime)
+		c.Assert(volumeInfo.DataStored, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
+		backupName, _, _, err := backupstore.DecodeBackupURL(backupN)
+		c.Assert(err, IsNil)
+		c.Assert(volumeInfo.LastBackupName, Equals, backupName)
+		c.Assert(volumeInfo.LastBackupAt, Not(Equals), "")
+		c.Assert(volumeInfo.BackingImageName, Equals, "")
+		c.Assert(volumeInfo.BackingImageChecksum, Equals, "")
 	}
-
-	// list backup volume names only
-	listName, err := backupstore.List(volume.v.Name, s.getDestURL(), true)
-	c.Assert(err, IsNil)
-	c.Assert(len(listName), Equals, 1)
-	volumeName, ok := listName[volume.v.Name]
-	c.Assert(ok, Equals, true)
-	c.Assert(len(volumeName.Backups), Equals, 0)
-
-	// list backup volume name and it's backups
-	listName, err = backupstore.List(volume.v.Name, s.getDestURL(), false)
-	c.Assert(err, IsNil)
-	c.Assert(len(listName), Equals, 1)
-	volumeName, ok = listName[volume.v.Name]
-	c.Assert(ok, Equals, true)
-	c.Assert(len(volumeName.Backups), Equals, snapshotCounts)
-
-	// inspect backup volume config
-	volumeInfo, err := backupstore.InspectVolume(backupstore.EncodeBackupURL("", volume.v.Name, s.getDestURL()))
-	c.Assert(err, IsNil)
-	c.Assert(volumeInfo.Name, Equals, volume.v.Name)
-	c.Assert(volumeInfo.Size, Equals, volumeSize)
-	c.Assert(volumeInfo.Created, Equals, volume.v.CreatedTime)
-	c.Assert(volumeInfo.DataStored, Equals, int64(snapshotCounts*backupstore.DEFAULT_BLOCK_SIZE))
-	backupName, _, _, err := backupstore.DecodeBackupURL(backupN)
-	c.Assert(err, IsNil)
-	c.Assert(volumeInfo.LastBackupName, Equals, backupName)
-	c.Assert(volumeInfo.LastBackupAt, Not(Equals), "")
-	c.Assert(volumeInfo.BackingImageName, Equals, "")
-	c.Assert(volumeInfo.BackingImageChecksum, Equals, "")
 }
 
 func (s *TestSuite) TestBackupRestoreExtra(c *C) {
-	// Make one block data
-	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
-	data := make([]byte, blockSize)
-	dataEmpty := make([]byte, blockSize)
-	dataModified := make([]byte, blockSize)
-	for i := int64(0); i < blockSize; i++ {
-		data[i] = letterBytes[rand.Intn(len(letterBytes))]
-		dataModified[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
+	compressionMethods := []string{"none", "gzip", "lz4"}
 
-	volume := RawFileVolume{
-		v: backupstore.Volume{
-			Name:        volumeName2,
-			Size:        volumeSize,
-			CreatedTime: util.Now(),
-		},
-	}
+	for _, compressionMethod := range compressionMethods {
+		volumeNameInTest := volumeName2 + "-" + compressionMethod
+		// Make one block data
+		blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
+		data := make([]byte, blockSize)
+		dataEmpty := make([]byte, blockSize)
+		dataModified := make([]byte, blockSize)
+		for i := int64(0); i < blockSize; i++ {
+			data[i] = letterBytes[rand.Intn(len(letterBytes))]
+			dataModified[i] = letterBytes[rand.Intn(len(letterBytes))]
+		}
 
-	for i := 0; i < snapshotCounts; i++ {
-		volume.Snapshots = append(volume.Snapshots,
-			backupstore.Snapshot{
-				Name:        s.getSnapshotName(snapIncrePreifix, i),
-				CreatedTime: util.Now(),
-			})
-	}
-
-	// snap0: blk * 4
-	snap0, err := os.Create(volume.Snapshots[0].Name)
-	c.Assert(err, IsNil)
-	defer snap0.Close()
-	for i := int64(0); i < 4; i++ {
-		_, err := snap0.WriteAt(data, i*blockSize)
-		c.Assert(err, IsNil)
-	}
-	for i := int64(4); i < volumeSize/blockSize; i++ {
-		_, err := snap0.WriteAt(dataEmpty, i*blockSize)
-		c.Assert(err, IsNil)
-	}
-	err = snap0.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-
-	// snap1: blk * 2 + empty blk * 1 + blk * 1
-	snap1, err := os.Create(volume.Snapshots[1].Name)
-	c.Assert(err, IsNil)
-	_, err = io.Copy(snap1, snap0)
-	c.Assert(err, IsNil)
-	_, err = snap1.WriteAt(dataEmpty, 2*blockSize)
-	c.Assert(err, IsNil)
-	err = snap1.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = snap1.Close()
-	c.Assert(err, IsNil)
-
-	//delta1 file between snap1 and snap0
-	delta1, err := os.Create("delta1")
-	c.Assert(err, IsNil)
-	_, err = delta1.WriteAt(dataEmpty, 2*blockSize)
-	c.Assert(err, IsNil)
-	err = delta1.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = delta1.Close()
-	c.Assert(err, IsNil)
-
-	// snap2: blk * 5
-	snap2, err := os.Create(volume.Snapshots[2].Name)
-	c.Assert(err, IsNil)
-	_, err = io.Copy(snap2, snap0)
-	c.Assert(err, IsNil)
-	_, err = snap2.WriteAt(data, 4*blockSize)
-	c.Assert(err, IsNil)
-	err = snap2.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = snap2.Close()
-	c.Assert(err, IsNil)
-
-	//delta2 file between snap2 and snap1
-	delta2, err := os.Create("delta2")
-	c.Assert(err, IsNil)
-	_, err = delta2.WriteAt(data, 4*blockSize)
-	c.Assert(err, IsNil)
-	err = delta2.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = delta2.Close()
-	c.Assert(err, IsNil)
-
-	// snap3: blk * 2 + modified blk * 1 + blk * 1
-	snap3, err := os.Create(volume.Snapshots[3].Name)
-	c.Assert(err, IsNil)
-	_, err = io.Copy(snap3, snap0)
-	c.Assert(err, IsNil)
-	_, err = snap3.WriteAt(dataModified, 2*blockSize)
-	c.Assert(err, IsNil)
-	err = snap3.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = snap3.Close()
-	c.Assert(err, IsNil)
-
-	//delta3 file between snap3 and snap2
-	delta3, err := os.Create("delta3")
-	c.Assert(err, IsNil)
-	_, err = delta3.WriteAt(dataModified, 2*blockSize)
-	c.Assert(err, IsNil)
-	err = delta3.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = delta3.Close()
-	c.Assert(err, IsNil)
-
-	// snap4 is consist of: blk * 1 + empty blk * 1 + modified blk * 1 + blk * 2
-	snap4, err := os.Create(volume.Snapshots[4].Name)
-	c.Assert(err, IsNil)
-	_, err = io.Copy(snap4, snap0)
-	c.Assert(err, IsNil)
-	_, err = snap4.WriteAt(dataEmpty, 1*blockSize)
-	c.Assert(err, IsNil)
-	_, err = snap4.WriteAt(dataModified, 2*blockSize)
-	c.Assert(err, IsNil)
-	_, err = snap4.WriteAt(data, 4*blockSize)
-	c.Assert(err, IsNil)
-	err = snap4.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = snap4.Close()
-	c.Assert(err, IsNil)
-
-	//delta4 file between snap4 and snap3
-	delta4, err := os.Create("delta4")
-	c.Assert(err, IsNil)
-	_, err = delta4.WriteAt(dataEmpty, 1*blockSize)
-	c.Assert(err, IsNil)
-	_, err = delta4.WriteAt(data, 4*blockSize)
-	c.Assert(err, IsNil)
-	err = delta4.Truncate(volumeSize)
-	c.Assert(err, IsNil)
-	err = delta4.Close()
-	c.Assert(err, IsNil)
-
-	lastBackupName := ""
-	restoreIncre := filepath.Join(s.BasePath, "restore-incre-file")
-	for i := 0; i < snapshotCounts; i++ {
-		config := &backupstore.DeltaBackupConfig{
-			Volume:   &volume.v,
-			Snapshot: &volume.Snapshots[i],
-			DestURL:  s.getDestURL(),
-			DeltaOps: &volume,
-			Labels: map[string]string{
-				"SnapshotName": volume.Snapshots[i].Name,
-				"RandomKey":    "RandomValue",
+		volume := RawFileVolume{
+			v: backupstore.Volume{
+				Name:              volumeNameInTest,
+				Size:              volumeSize,
+				CompressionMethod: compressionMethod,
+				CreatedTime:       util.Now(),
 			},
 		}
-		backup := s.createAndWaitForBackup(c, config, &volume)
-		restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
-		rConfig := &backupstore.DeltaRestoreConfig{
-			BackupURL: backup,
-			DeltaOps:  &volume,
-			Filename:  restore,
+
+		for i := 0; i < snapshotCounts; i++ {
+			volume.Snapshots = append(volume.Snapshots,
+				backupstore.Snapshot{
+					Name:        s.getSnapshotName(snapIncrePreifix, i),
+					CreatedTime: util.Now(),
+				})
 		}
 
-		err := backupstore.RestoreDeltaBlockBackup(rConfig)
+		// snap0: blk * 4
+		snap0, err := os.Create(volume.Snapshots[0].Name)
 		c.Assert(err, IsNil)
-		s.waitForRestoreCompletion(c, &volume)
-
-		err = exec.Command("diff", restore, volume.Snapshots[i].Name).Run()
-		c.Assert(err, IsNil)
-
-		rConfig = &backupstore.DeltaRestoreConfig{
-			BackupURL:      backup,
-			DeltaOps:       &volume,
-			LastBackupName: lastBackupName,
-			Filename:       restoreIncre,
-		}
-
-		err = backupstore.RestoreDeltaBlockBackupIncrementally(rConfig)
-		if i == 0 {
-			c.Assert(err, NotNil)
-			c.Assert(err, ErrorMatches, "invalid parameter lastBackupName "+lastBackupName)
-		} else {
+		defer snap0.Close()
+		for i := int64(0); i < 4; i++ {
+			_, err := snap0.WriteAt(data, i*blockSize)
 			c.Assert(err, IsNil)
+		}
+		for i := int64(4); i < volumeSize/blockSize; i++ {
+			_, err := snap0.WriteAt(dataEmpty, i*blockSize)
+			c.Assert(err, IsNil)
+		}
+		err = snap0.Truncate(volumeSize)
+		c.Assert(err, IsNil)
 
+		// snap1: blk * 2 + empty blk * 1 + blk * 1
+		snap1, err := os.Create(volume.Snapshots[1].Name)
+		c.Assert(err, IsNil)
+		_, err = io.Copy(snap1, snap0)
+		c.Assert(err, IsNil)
+		_, err = snap1.WriteAt(dataEmpty, 2*blockSize)
+		c.Assert(err, IsNil)
+		err = snap1.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = snap1.Close()
+		c.Assert(err, IsNil)
+
+		//delta1 file between snap1 and snap0
+		delta1, err := os.Create("delta1")
+		c.Assert(err, IsNil)
+		_, err = delta1.WriteAt(dataEmpty, 2*blockSize)
+		c.Assert(err, IsNil)
+		err = delta1.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = delta1.Close()
+		c.Assert(err, IsNil)
+
+		// snap2: blk * 5
+		snap2, err := os.Create(volume.Snapshots[2].Name)
+		c.Assert(err, IsNil)
+		_, err = io.Copy(snap2, snap0)
+		c.Assert(err, IsNil)
+		_, err = snap2.WriteAt(data, 4*blockSize)
+		c.Assert(err, IsNil)
+		err = snap2.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = snap2.Close()
+		c.Assert(err, IsNil)
+
+		//delta2 file between snap2 and snap1
+		delta2, err := os.Create("delta2")
+		c.Assert(err, IsNil)
+		_, err = delta2.WriteAt(data, 4*blockSize)
+		c.Assert(err, IsNil)
+		err = delta2.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = delta2.Close()
+		c.Assert(err, IsNil)
+
+		// snap3: blk * 2 + modified blk * 1 + blk * 1
+		snap3, err := os.Create(volume.Snapshots[3].Name)
+		c.Assert(err, IsNil)
+		_, err = io.Copy(snap3, snap0)
+		c.Assert(err, IsNil)
+		_, err = snap3.WriteAt(dataModified, 2*blockSize)
+		c.Assert(err, IsNil)
+		err = snap3.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = snap3.Close()
+		c.Assert(err, IsNil)
+
+		//delta3 file between snap3 and snap2
+		delta3, err := os.Create("delta3")
+		c.Assert(err, IsNil)
+		_, err = delta3.WriteAt(dataModified, 2*blockSize)
+		c.Assert(err, IsNil)
+		err = delta3.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = delta3.Close()
+		c.Assert(err, IsNil)
+
+		// snap4 is consist of: blk * 1 + empty blk * 1 + modified blk * 1 + blk * 2
+		snap4, err := os.Create(volume.Snapshots[4].Name)
+		c.Assert(err, IsNil)
+		_, err = io.Copy(snap4, snap0)
+		c.Assert(err, IsNil)
+		_, err = snap4.WriteAt(dataEmpty, 1*blockSize)
+		c.Assert(err, IsNil)
+		_, err = snap4.WriteAt(dataModified, 2*blockSize)
+		c.Assert(err, IsNil)
+		_, err = snap4.WriteAt(data, 4*blockSize)
+		c.Assert(err, IsNil)
+		err = snap4.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = snap4.Close()
+		c.Assert(err, IsNil)
+
+		//delta4 file between snap4 and snap3
+		delta4, err := os.Create("delta4")
+		c.Assert(err, IsNil)
+		_, err = delta4.WriteAt(dataEmpty, 1*blockSize)
+		c.Assert(err, IsNil)
+		_, err = delta4.WriteAt(data, 4*blockSize)
+		c.Assert(err, IsNil)
+		err = delta4.Truncate(volumeSize)
+		c.Assert(err, IsNil)
+		err = delta4.Close()
+		c.Assert(err, IsNil)
+
+		lastBackupName := ""
+		restoreIncre := filepath.Join(s.BasePath, "restore-incre-file")
+		for i := 0; i < snapshotCounts; i++ {
+			config := &backupstore.DeltaBackupConfig{
+				Volume:   &volume.v,
+				Snapshot: &volume.Snapshots[i],
+				DestURL:  s.getDestURL(),
+				DeltaOps: &volume,
+				Labels: map[string]string{
+					"SnapshotName": volume.Snapshots[i].Name,
+					"RandomKey":    "RandomValue",
+				},
+			}
+			backup := s.createAndWaitForBackup(c, config, &volume)
+			restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
+			rConfig := &backupstore.DeltaRestoreConfig{
+				BackupURL: backup,
+				DeltaOps:  &volume,
+				Filename:  restore,
+			}
+
+			err := backupstore.RestoreDeltaBlockBackup(rConfig)
+			c.Assert(err, IsNil)
 			s.waitForRestoreCompletion(c, &volume)
-			deltaName := "delta" + strconv.Itoa(i)
-			err = exec.Command("diff", restoreIncre, deltaName).Run()
-			c.Assert(err, IsNil)
-			os.Remove(deltaName)
-		}
 
-		backupInfo, err := backupstore.InspectBackup(backup)
-		c.Assert(err, IsNil)
-		lastBackupName = backupInfo.Name
-		c.Assert(backupInfo.URL, Equals, backup)
-		c.Assert(backupInfo.SnapshotName, Equals, volume.Snapshots[i].Name)
-		c.Assert(backupInfo.SnapshotCreated, Equals, volume.Snapshots[i].CreatedTime)
-		c.Assert(backupInfo.Created, Not(Equals), "")
-		c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
-		c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
-		if i == 0 {
-			c.Assert(backupInfo.IsIncremental, Equals, false)
-		} else {
-			c.Assert(backupInfo.IsIncremental, Equals, true)
+			err = exec.Command("diff", restore, volume.Snapshots[i].Name).Run()
+			c.Assert(err, IsNil)
+
+			rConfig = &backupstore.DeltaRestoreConfig{
+				BackupURL:      backup,
+				DeltaOps:       &volume,
+				LastBackupName: lastBackupName,
+				Filename:       restoreIncre,
+			}
+
+			err = backupstore.RestoreDeltaBlockBackupIncrementally(rConfig)
+			if i == 0 {
+				c.Assert(err, NotNil)
+				c.Assert(err, ErrorMatches, "invalid parameter lastBackupName "+lastBackupName)
+			} else {
+				c.Assert(err, IsNil)
+
+				s.waitForRestoreCompletion(c, &volume)
+				deltaName := "delta" + strconv.Itoa(i)
+				err = exec.Command("diff", restoreIncre, deltaName).Run()
+				c.Assert(err, IsNil)
+				os.Remove(deltaName)
+			}
+
+			backupInfo, err := backupstore.InspectBackup(backup)
+			c.Assert(err, IsNil)
+			lastBackupName = backupInfo.Name
+			c.Assert(backupInfo.URL, Equals, backup)
+			c.Assert(backupInfo.SnapshotName, Equals, volume.Snapshots[i].Name)
+			c.Assert(backupInfo.SnapshotCreated, Equals, volume.Snapshots[i].CreatedTime)
+			c.Assert(backupInfo.Created, Not(Equals), "")
+			c.Assert(backupInfo.Labels["SnapshotName"], Equals, volume.Snapshots[i].Name)
+			c.Assert(backupInfo.Labels["RandomKey"], Equals, "RandomValue")
+			if i == 0 {
+				c.Assert(backupInfo.IsIncremental, Equals, false)
+			} else {
+				c.Assert(backupInfo.IsIncremental, Equals, true)
+			}
+			c.Assert(backupInfo.VolumeName, Equals, volumeNameInTest)
+			c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
+			c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
+			c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
 		}
-		c.Assert(backupInfo.VolumeName, Equals, volumeName2)
-		c.Assert(backupInfo.VolumeSize, Equals, volumeSize)
-		c.Assert(backupInfo.VolumeCreated, Equals, volume.v.CreatedTime)
-		c.Assert(backupInfo.VolumeBackingImageName, Equals, "")
 	}
 }

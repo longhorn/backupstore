@@ -19,7 +19,7 @@ func InspectVolume(volumeURL string) (*VolumeInfo, error) {
 		return nil, err
 	}
 
-	volume, err := loadVolume(volumeName, driver)
+	volume, err := loadVolume(driver, volumeName)
 	if err != nil {
 		return nil, err
 	}
@@ -38,12 +38,12 @@ func InspectBackup(backupURL string) (*BackupInfo, error) {
 		return nil, err
 	}
 
-	volume, err := loadVolume(volumeName, driver)
+	volume, err := loadVolume(driver, volumeName)
 	if err != nil {
 		return nil, err
 	}
 
-	backup, err := loadBackup(backupName, volumeName, driver)
+	backup, err := loadBackup(driver, backupName, volumeName)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			LogFieldReason: LogReasonFallback,
