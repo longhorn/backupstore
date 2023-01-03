@@ -57,20 +57,24 @@ func (s *TestSuite) TearDownSuite(c *C) {
 }
 
 func (s *TestSuite) TestCompress(c *C) {
-	var err error
-	data := []byte("Some random string")
-	checksum := GetChecksum(data)
+	compressionMethods := []string{"none", "gzip", "lz4"}
 
-	compressed, err := CompressData(data)
-	c.Assert(err, IsNil)
+	for _, compressionMethod := range compressionMethods {
+		var err error
+		data := []byte("Some random string")
+		checksum := GetChecksum(data)
 
-	decompressed, err := DecompressAndVerify(compressed, checksum)
-	c.Assert(err, IsNil)
+		compressed, err := CompressData(compressionMethod, data)
+		c.Assert(err, IsNil)
 
-	result, err := ioutil.ReadAll(decompressed)
-	c.Assert(err, IsNil)
+		decompressed, err := DecompressAndVerify(compressionMethod, compressed, checksum)
+		c.Assert(err, IsNil)
 
-	c.Assert(result, DeepEquals, data)
+		result, err := ioutil.ReadAll(decompressed)
+		c.Assert(err, IsNil)
+
+		c.Assert(result, DeepEquals, data)
+	}
 }
 
 func GenerateRandString() string {
