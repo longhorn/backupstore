@@ -68,6 +68,10 @@ func GetFileChecksum(filePath string) (string, error) {
 }
 
 func CompressData(method string, data []byte) (io.ReadSeeker, error) {
+	if method == "none" {
+		return bytes.NewReader(data), nil
+	}
+
 	var buffer bytes.Buffer
 
 	w, err := newCompressionWriter(method, &buffer)
@@ -84,7 +88,7 @@ func CompressData(method string, data []byte) (io.ReadSeeker, error) {
 }
 
 func DecompressAndVerify(method string, src io.Reader, checksum string) (io.Reader, error) {
-	r, err := newDepcompressionReader(method, src)
+	r, err := newDecompressionReader(method, src)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +105,6 @@ func DecompressAndVerify(method string, src io.Reader, checksum string) (io.Read
 
 func newCompressionWriter(method string, buffer io.Writer) (io.WriteCloser, error) {
 	switch method {
-	case "none":
-		return NopCloser{buffer}, nil
 	case "gzip":
 		return gzip.NewWriter(buffer), nil
 	case "lz4":
@@ -112,7 +114,7 @@ func newCompressionWriter(method string, buffer io.Writer) (io.WriteCloser, erro
 	}
 }
 
-func newDepcompressionReader(method string, r io.Reader) (io.ReadCloser, error) {
+func newDecompressionReader(method string, r io.Reader) (io.ReadCloser, error) {
 	switch method {
 	case "none":
 		return ioutil.NopCloser(r), nil

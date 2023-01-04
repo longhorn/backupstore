@@ -27,6 +27,11 @@ type Snapshot struct {
 	CreatedTime string
 }
 
+type ProcessingBlocks struct {
+	sync.Mutex
+	blocks map[string][]*BlockMapping
+}
+
 type Backup struct {
 	sync.Mutex
 	Name              string
@@ -38,6 +43,8 @@ type Backup struct {
 	Labels            map[string]string
 	IsIncremental     bool
 	CompressionMethod string
+
+	ProcessingBlocks *ProcessingBlocks
 
 	Blocks     []BlockMapping `json:",omitempty"`
 	SingleFile BackupFile     `json:",omitempty"`

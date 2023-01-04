@@ -279,8 +279,8 @@ func (s *TestSuite) waitForRestoreCompletion(c *C, deltaOps *RawFileVolume) {
 }
 
 func (s *TestSuite) TestBackupBasic(c *C) {
-	compressionMethods := []string{"none", "gzip", "lz4"}
-
+	compressionMethods := []string{"none", "lz4", "gzip"}
+	concurrentLimit := 5
 	for _, compressionMethod := range compressionMethods {
 		volumeNameInTest := volumeName + "-" + compressionMethod
 
@@ -323,11 +323,12 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		backupN := ""
 		for i := 0; i < snapshotCounts; i++ {
 			config := &backupstore.DeltaBackupConfig{
-				BackupName: util.GenerateName("backup"),
-				Volume:     &volume.v,
-				Snapshot:   &volume.Snapshots[i],
-				DestURL:    s.getDestURL(),
-				DeltaOps:   &volume,
+				BackupName:            util.GenerateName("backup"),
+				Volume:                &volume.v,
+				Snapshot:              &volume.Snapshots[i],
+				DestURL:               s.getDestURL(),
+				DeltaOps:              &volume,
+				ConcurrentUploadLimit: int32(concurrentLimit),
 				Labels: map[string]string{
 					"SnapshotName": volume.Snapshots[i].Name,
 					"RandomKey":    "RandomValue",
@@ -409,7 +410,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 
 func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 	compressionMethods := []string{"none", "gzip", "lz4"}
-
+	concurrentLimit := 5
 	for _, compressionMethod := range compressionMethods {
 		volumeNameInTest := volumeName2 + "-" + compressionMethod
 		// Make one block data
@@ -552,10 +553,11 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		restoreIncre := filepath.Join(s.BasePath, "restore-incre-file")
 		for i := 0; i < snapshotCounts; i++ {
 			config := &backupstore.DeltaBackupConfig{
-				Volume:   &volume.v,
-				Snapshot: &volume.Snapshots[i],
-				DestURL:  s.getDestURL(),
-				DeltaOps: &volume,
+				Volume:                &volume.v,
+				Snapshot:              &volume.Snapshots[i],
+				DestURL:               s.getDestURL(),
+				DeltaOps:              &volume,
+				ConcurrentUploadLimit: int32(concurrentLimit),
 				Labels: map[string]string{
 					"SnapshotName": volume.Snapshots[i].Name,
 					"RandomKey":    "RandomValue",
