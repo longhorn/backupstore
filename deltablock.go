@@ -230,6 +230,9 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (backupID string, isIncre
 		SnapshotName:      snapshot.Name,
 		CompressionMethod: volume.CompressionMethod,
 		Blocks:            []BlockMapping{},
+		ProcessingBlocks: &ProcessingBlocks{
+			blocks: map[string][]*BlockMapping{},
+		},
 	}
 
 	// keep lock alive for async go routine.
@@ -270,6 +273,47 @@ func getProgress(total, processed int64) int {
 	return int((float64(processed+1) / float64(total)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
 }
 
+func isBlockBeingProcessed(deltaBackup *Backup, offset int64, checksum string) bool {
+	processingBlocks := deltaBackup.ProcessingBlocks
+
+	processingBlocks.Lock()
+	defer processingBlocks.Unlock()
+
+	blockInfo := &BlockMapping{
+		Offset:        offset,
+		BlockChecksum: checksum,
+	}
+	if _, ok := processingBlocks.blocks[checksum]; ok {
+		processingBlocks.blocks[checksum] = append(processingBlocks.blocks[checksum], blockInfo)
+		return true
+	}
+
+	processingBlocks.blocks[checksum] = []*BlockMapping{blockInfo}
+	return false
+}
+
+func updateStatis(deltaBackup *Backup, progress *backupProgress, checksum string, newBlock bool) {
+	processingBlocks := deltaBackup.ProcessingBlocks
+
+	processingBlocks.Lock()
+	defer processingBlocks.Unlock()
+
+	// Update deltaBackup.Blocks
+	blocks := processingBlocks.blocks[checksum]
+	for _, block := range blocks {
+		deltaBackup.Blocks = append(deltaBackup.Blocks, *block)
+	}
+
+	// Update progress
+	if newBlock {
+		progress.newBlockCounts++
+	}
+	progress.processedBlockCounts += int64(len(blocks))
+	progress.progress = getProgress(progress.totalBlockCounts, progress.processedBlockCounts)
+
+	delete(processingBlocks.blocks, checksum)
+}
+
 func processBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 	deltaBackup *Backup, offset int64, block []byte, progress *backupProgress) error {
 	var err error
@@ -279,21 +323,21 @@ func processBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 	deltaOps := config.DeltaOps
 
 	checksum := util.GetChecksum(block)
+
+	// This prevents multiple goroutines from trying to upload blocks that contain identical contents
+	// with the same checksum but different offsets).
+	// After uploading, `bsDriver.FileExists(blkFile)` is used to avoid repeat uploading.
+	if isBlockBeingProcessed(deltaBackup, offset, checksum) {
+		return nil
+	}
+
 	defer func() {
 		if err != nil {
 			return
 		}
 		deltaBackup.Lock()
 		defer deltaBackup.Unlock()
-		if newBlock {
-			progress.newBlockCounts++
-		}
-		progress.processedBlockCounts++
-		progress.progress = getProgress(progress.totalBlockCounts, progress.processedBlockCounts)
-		deltaBackup.Blocks = append(deltaBackup.Blocks, BlockMapping{
-			Offset:        offset,
-			BlockChecksum: checksum,
-		})
+		updateStatis(deltaBackup, progress, checksum, newBlock)
 		deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, progress.progress, "", "")
 	}()
 
@@ -419,11 +463,32 @@ func mergeErrorChannels(ctx context.Context, channels ...<-chan error) <-chan er
 	return out
 }
 
+func sortBackupBlocks(blocks []BlockMapping, volumeSize, blockSize int64) []BlockMapping {
+	sortedBlocks := make([]string, volumeSize/blockSize)
+	for _, block := range blocks {
+		i := block.Offset / blockSize
+		sortedBlocks[i] = block.BlockChecksum
+	}
+
+	blockMappings := []BlockMapping{}
+	for i, checksum := range sortedBlocks {
+		if checksum != "" {
+			blockMappings = append(blockMappings, BlockMapping{
+				Offset:        int64(i) * blockSize,
+				BlockChecksum: checksum,
+			})
+		}
+	}
+
+	return blockMappings
+}
+
 // performBackup if lastBackup is present we will do an incremental backup
 func performBackup(bsDriver BackupStoreDriver, config *DeltaBackupConfig, delta *Mappings, deltaBackup *Backup, lastBackup *Backup) (int, string, error) {
 	volume := config.Volume
 	snapshot := config.Snapshot
 	destURL := config.DestURL
+	concurrentUploadLimit := config.ConcurrentUploadLimit
 
 	// create an in progress backup config file
 	if err := saveBackup(bsDriver, &Backup{
@@ -452,7 +517,7 @@ func performBackup(bsDriver BackupStoreDriver, config *DeltaBackupConfig, delta 
 	mappingChan, errChan := populateMappings(bsDriver, config, deltaBackup, delta)
 
 	errorChans := []<-chan error{errChan}
-	for i := 0; i < 1; i++ {
+	for i := 0; i < int(concurrentUploadLimit); i++ {
 		errorChans = append(errorChans, processMappings(ctx, bsDriver, config,
 			deltaBackup, delta.BlockSize, progress, mappingChan))
 	}
@@ -475,6 +540,8 @@ func performBackup(bsDriver BackupStoreDriver, config *DeltaBackupConfig, delta 
 		LogFieldSnapshot: snapshot.Name,
 	}).Infof("Created snapshot changed blocks: %v mappings, %v blocks and %v new blocks",
 		len(delta.Mappings), progress.totalBlockCounts, progress.newBlockCounts)
+
+	deltaBackup.Blocks = sortBackupBlocks(deltaBackup.Blocks, volume.Size, delta.BlockSize)
 
 	backup := mergeSnapshotMap(deltaBackup, lastBackup)
 	backup.SnapshotName = snapshot.Name
@@ -660,7 +727,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 
 		blkCounts := len(backup.Blocks)
 		for i, block := range backup.Blocks {
-			log.Debugf("Restore for %v: block %v, %v/%v", volDevName, block.BlockChecksum, i+1, blkCounts)
+			log.Infof("Restore for %v: block %v, %v/%v, offset=%v", volDevName, block.BlockChecksum, i+1, blkCounts, block.Offset)
 			if err := restoreBlockToFile(bsDriver, vol.CompressionMethod, srcVolumeName, volDev, block); err != nil {
 				deltaOps.UpdateRestoreStatus(volDevName, progress, err)
 				return
@@ -689,10 +756,8 @@ func restoreBlockToFile(bsDriver BackupStoreDriver, decompression, volumeName st
 	if _, err := volDev.Seek(blk.Offset, 0); err != nil {
 		return err
 	}
-	if _, err := io.CopyN(volDev, r, DEFAULT_BLOCK_SIZE); err != nil {
-		return err
-	}
-	return nil
+	_, err = io.CopyN(volDev, r, DEFAULT_BLOCK_SIZE)
+	return err
 }
 
 func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
