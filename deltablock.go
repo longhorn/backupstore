@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
@@ -17,20 +18,21 @@ import (
 )
 
 type DeltaBackupConfig struct {
-	BackupName            string
-	Volume                *Volume
-	Snapshot              *Snapshot
-	DestURL               string
-	DeltaOps              DeltaBlockBackupOperations
-	Labels                map[string]string
-	ConcurrentUploadLimit int32
+	BackupName      string
+	Volume          *Volume
+	Snapshot        *Snapshot
+	DestURL         string
+	DeltaOps        DeltaBlockBackupOperations
+	Labels          map[string]string
+	ConcurrentLimit int32
 }
 
 type DeltaRestoreConfig struct {
-	BackupURL      string
-	DeltaOps       DeltaRestoreOperations
-	LastBackupName string
-	Filename       string
+	BackupURL       string
+	DeltaOps        DeltaRestoreOperations
+	LastBackupName  string
+	Filename        string
+	ConcurrentLimit int32
 }
 
 type BlockMapping struct {
@@ -292,7 +294,7 @@ func isBlockBeingProcessed(deltaBackup *Backup, offset int64, checksum string) b
 	return false
 }
 
-func updateStatis(deltaBackup *Backup, progress *backupProgress, checksum string, newBlock bool) {
+func updateBlocksAndProgress(deltaBackup *Backup, progress *progress, checksum string, newBlock bool) {
 	processingBlocks := deltaBackup.ProcessingBlocks
 
 	processingBlocks.Lock()
@@ -305,17 +307,22 @@ func updateStatis(deltaBackup *Backup, progress *backupProgress, checksum string
 	}
 
 	// Update progress
-	if newBlock {
-		progress.newBlockCounts++
-	}
-	progress.processedBlockCounts += int64(len(blocks))
-	progress.progress = getProgress(progress.totalBlockCounts, progress.processedBlockCounts)
+	func() {
+		progress.Lock()
+		defer progress.Unlock()
+
+		if newBlock {
+			progress.newBlockCounts++
+		}
+		progress.processedBlockCounts += int64(len(blocks))
+		progress.progress = getProgress(progress.totalBlockCounts, progress.processedBlockCounts)
+	}()
 
 	delete(processingBlocks.blocks, checksum)
 }
 
-func processBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
-	deltaBackup *Backup, offset int64, block []byte, progress *backupProgress) error {
+func backupBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
+	deltaBackup *Backup, offset int64, block []byte, progress *progress) error {
 	var err error
 	newBlock := false
 	volume := config.Volume
@@ -337,7 +344,7 @@ func processBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 		}
 		deltaBackup.Lock()
 		defer deltaBackup.Unlock()
-		updateStatis(deltaBackup, progress, checksum, newBlock)
+		updateBlocksAndProgress(deltaBackup, progress, checksum, newBlock)
 		deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, progress.progress, "", "")
 	}()
 
@@ -357,8 +364,8 @@ func processBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 	return bsDriver.Write(blkFile, rs)
 }
 
-func processMapping(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
-	deltaBackup *Backup, blockSize int64, mapping Mapping, progress *backupProgress) error {
+func backupMapping(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
+	deltaBackup *Backup, blockSize int64, mapping Mapping, progress *progress) error {
 	volume := config.Volume
 	snapshot := config.Snapshot
 	deltaOps := config.DeltaOps
@@ -375,8 +382,8 @@ func processMapping(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 			return err
 		}
 
-		if err := processBlock(bsDriver, config, deltaBackup, offset, block, progress); err != nil {
-			logrus.WithError(err).Errorf("Failed to process volume %v snapshot %v block at offset %v size %v",
+		if err := backupBlock(bsDriver, config, deltaBackup, offset, block, progress); err != nil {
+			logrus.WithError(err).Errorf("Failed to back up volume %v snapshot %v block at offset %v size %v",
 				volume.Name, snapshot.Name, offset, len(block))
 			return err
 		}
@@ -385,8 +392,8 @@ func processMapping(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 	return nil
 }
 
-func processMappings(ctx context.Context, bsDriver BackupStoreDriver, config *DeltaBackupConfig,
-	deltaBackup *Backup, blockSize int64, progress *backupProgress, in <-chan Mapping) <-chan error {
+func backupMappings(ctx context.Context, bsDriver BackupStoreDriver, config *DeltaBackupConfig,
+	deltaBackup *Backup, blockSize int64, progress *progress, in <-chan Mapping) <-chan error {
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -400,7 +407,7 @@ func processMappings(ctx context.Context, bsDriver BackupStoreDriver, config *De
 					return
 				}
 
-				if err := processMapping(bsDriver, config, deltaBackup, blockSize, mapping, progress); err != nil {
+				if err := backupMapping(bsDriver, config, deltaBackup, blockSize, mapping, progress); err != nil {
 					errChan <- err
 					return
 				}
@@ -411,7 +418,9 @@ func processMappings(ctx context.Context, bsDriver BackupStoreDriver, config *De
 	return errChan
 }
 
-type backupProgress struct {
+type progress struct {
+	sync.Mutex
+
 	totalBlockCounts     int64
 	processedBlockCounts int64
 	newBlockCounts       int64
@@ -419,7 +428,7 @@ type backupProgress struct {
 	progress int
 }
 
-func getTotalBlockCounts(delta *Mappings) (int64, error) {
+func getTotalBackupBlockCounts(delta *Mappings) (int64, error) {
 	totalBlockCounts := int64(0)
 	for _, d := range delta.Mappings {
 		if d.Size%delta.BlockSize != 0 {
@@ -488,7 +497,7 @@ func performBackup(bsDriver BackupStoreDriver, config *DeltaBackupConfig, delta 
 	volume := config.Volume
 	snapshot := config.Snapshot
 	destURL := config.DestURL
-	concurrentUploadLimit := config.ConcurrentUploadLimit
+	concurrentLimit := config.ConcurrentLimit
 
 	// create an in progress backup config file
 	if err := saveBackup(bsDriver, &Backup{
@@ -503,30 +512,27 @@ func performBackup(bsDriver BackupStoreDriver, config *DeltaBackupConfig, delta 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	totalBlockCounts, err := getTotalBlockCounts(delta)
+	totalBlockCounts, err := getTotalBackupBlockCounts(delta)
 	if err != nil {
 		return 0, "", err
 	}
 	logrus.Infof("Volume %v Snapshot %v is consist of %v mappings and %v blocks",
 		volume.Name, snapshot.Name, len(delta.Mappings), totalBlockCounts)
 
-	progress := &backupProgress{
+	progress := &progress{
 		totalBlockCounts: totalBlockCounts,
 	}
 
 	mappingChan, errChan := populateMappings(bsDriver, config, deltaBackup, delta)
 
 	errorChans := []<-chan error{errChan}
-	for i := 0; i < int(concurrentUploadLimit); i++ {
-		errorChans = append(errorChans, processMappings(ctx, bsDriver, config,
+	for i := 0; i < int(concurrentLimit); i++ {
+		errorChans = append(errorChans, backupMappings(ctx, bsDriver, config,
 			deltaBackup, delta.BlockSize, progress, mappingChan))
 	}
 
 	mergedErrChan := mergeErrorChannels(ctx, errorChans...)
-	select {
-	case err = <-mergedErrChan:
-		break
-	}
+	err = <-mergedErrChan
 
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to backup volume %v snapshot %v", volume.Name, snapshot.Name)
@@ -628,6 +634,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 
 	volDevName := config.Filename
 	backupURL := config.BackupURL
+	concurrentLimit := config.ConcurrentLimit
 	deltaOps := config.DeltaOps
 	if deltaOps == nil {
 		return fmt.Errorf("missing DeltaRestoreOperations")
@@ -667,7 +674,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 
 	if _, err := os.Stat(volDevName); err == nil {
 		logrus.Warnf("File %s for the restore exists, will remove and re-create it", volDevName)
-		if err := os.Remove(volDevName); err != nil {
+		if err := os.RemoveAll(volDevName); err != nil {
 			return errors.Wrapf(err, "failed to clean up the existing file %v before restore", volDevName)
 		}
 	}
@@ -711,7 +718,10 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		defer volDev.Close()
 		defer lock.Unlock()
 
-		var progress int
+		progress := &progress{
+			totalBlockCounts: int64(len(backup.Blocks)),
+		}
+
 		// This pre-truncate is to ensure the XFS speculatively
 		// preallocates post-EOF blocks get reclaimed when volDev is
 		// closed.
@@ -720,20 +730,27 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		if stat.Mode()&os.ModeType == 0 {
 			log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
 			if err := volDev.Truncate(vol.Size); err != nil {
-				deltaOps.UpdateRestoreStatus(volDevName, progress, err)
+				deltaOps.UpdateRestoreStatus(volDevName, progress.progress, err)
 				return
 			}
 		}
 
-		blkCounts := len(backup.Blocks)
-		for i, block := range backup.Blocks {
-			log.Infof("Restore for %v: block %v, %v/%v, offset=%v", volDevName, block.BlockChecksum, i+1, blkCounts, block.Offset)
-			if err := restoreBlockToFile(bsDriver, vol.CompressionMethod, srcVolumeName, volDev, block); err != nil {
-				deltaOps.UpdateRestoreStatus(volDevName, progress, err)
-				return
-			}
-			progress = int((float64(i+1) / float64(blkCounts)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
-			deltaOps.UpdateRestoreStatus(volDevName, progress, err)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		blockChan, errChan := populateBlocksForFullRestore(bsDriver, backup)
+
+		errorChans := []<-chan error{errChan}
+		for i := 0; i < int(concurrentLimit); i++ {
+			errorChans = append(errorChans, restoreBlocks(ctx, bsDriver, config, srcVolumeName, blockChan, progress))
+		}
+
+		mergedErrChan := mergeErrorChannels(ctx, errorChans...)
+		err = <-mergedErrChan
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to delta restore volume %v backup %v", srcVolumeName, backup.Name)
+			deltaOps.UpdateRestoreStatus(volDevName, progress.progress, err)
+			return
 		}
 
 		deltaOps.UpdateRestoreStatus(volDevName, PROGRESS_PERCENTAGE_BACKUP_TOTAL, nil)
@@ -742,7 +759,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 	return nil
 }
 
-func restoreBlockToFile(bsDriver BackupStoreDriver, decompression, volumeName string, volDev *os.File, blk BlockMapping) error {
+func restoreBlockToFile(bsDriver BackupStoreDriver, volumeName string, volDev *os.File, decompression string, blk BlockMapping) error {
 	blkFile := getBlockFilePath(volumeName, blk.BlockChecksum)
 	rc, err := bsDriver.Read(blkFile)
 	if err != nil {
@@ -872,7 +889,7 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 			}
 		}
 
-		if err := performIncrementalRestore(bsDriver, srcVolumeName, volDev, lastBackup, backup, config); err != nil {
+		if err := performIncrementalRestore(bsDriver, config, srcVolumeName, volDevName, lastBackup, backup); err != nil {
 			deltaOps.UpdateRestoreStatus(volDevName, 0, err)
 			return
 		}
@@ -882,62 +899,182 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 	return nil
 }
 
-func performIncrementalRestore(bsDriver BackupStoreDriver, srcVolumeName string, volDev *os.File, lastBackup *Backup, backup *Backup, config *DeltaRestoreConfig) error {
-	var progress int
-	volDevName := config.Filename
-	deltaOps := config.DeltaOps
-
-	emptyBlock := make([]byte, DEFAULT_BLOCK_SIZE)
-	total := len(backup.Blocks) + len(lastBackup.Blocks)
-
-	for b, l := 0, 0; b < len(backup.Blocks) || l < len(lastBackup.Blocks); {
-		if b >= len(backup.Blocks) {
-			if err := fillBlockToFile(&emptyBlock, volDev, lastBackup.Blocks[l].Offset); err != nil {
-				return err
-			}
-			l++
-			continue
-		}
-		if l >= len(lastBackup.Blocks) {
-			if err := restoreBlockToFile(bsDriver, backup.CompressionMethod, srcVolumeName, volDev, backup.Blocks[b]); err != nil {
-				return err
-			}
-			b++
-			continue
-		}
-
-		bB := backup.Blocks[b]
-		lB := lastBackup.Blocks[l]
-		if bB.Offset == lB.Offset {
-			if bB.BlockChecksum != lB.BlockChecksum {
-				if err := restoreBlockToFile(bsDriver, backup.CompressionMethod, srcVolumeName, volDev, bB); err != nil {
-					return err
-				}
-			}
-			b++
-			l++
-		} else if bB.Offset < lB.Offset {
-			if err := restoreBlockToFile(bsDriver, backup.CompressionMethod, srcVolumeName, volDev, bB); err != nil {
-				return err
-			}
-			b++
-		} else {
-			if err := fillBlockToFile(&emptyBlock, volDev, lB.Offset); err != nil {
-				return err
-			}
-			l++
-		}
-		progress = int((float64(b+l+2) / float64(total)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
-		deltaOps.UpdateRestoreStatus(volDevName, progress, nil)
-	}
-	return nil
+type Block struct {
+	offset            int64
+	blockChecksum     string
+	compressionMethod string
+	isZeroBlock       bool
 }
 
-func fillBlockToFile(block *[]byte, volDev *os.File, offset int64) error {
-	if _, err := volDev.WriteAt(*block, offset); err != nil {
-		return err
+func populateBlocksForIncrementalRestore(bsDriver BackupStoreDriver, lastBackup, backup *Backup) (<-chan *Block, <-chan error) {
+	blockChan := make(chan *Block, 10)
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer close(blockChan)
+		defer close(errChan)
+
+		for b, l := 0, 0; b < len(backup.Blocks) || l < len(lastBackup.Blocks); {
+			if b >= len(backup.Blocks) {
+				blockChan <- &Block{
+					offset:      lastBackup.Blocks[l].Offset,
+					isZeroBlock: true,
+				}
+				l++
+				continue
+			}
+			if l >= len(lastBackup.Blocks) {
+				blockChan <- &Block{
+					offset:            backup.Blocks[b].Offset,
+					blockChecksum:     backup.Blocks[b].BlockChecksum,
+					compressionMethod: backup.CompressionMethod,
+				}
+				b++
+				continue
+			}
+
+			bB := backup.Blocks[b]
+			lB := lastBackup.Blocks[l]
+			if bB.Offset == lB.Offset {
+				if bB.BlockChecksum != lB.BlockChecksum {
+					blockChan <- &Block{
+						offset:            bB.Offset,
+						blockChecksum:     bB.BlockChecksum,
+						compressionMethod: backup.CompressionMethod,
+					}
+				}
+				b++
+				l++
+			} else if bB.Offset < lB.Offset {
+				blockChan <- &Block{
+					offset:            bB.Offset,
+					blockChecksum:     bB.BlockChecksum,
+					compressionMethod: backup.CompressionMethod,
+				}
+				b++
+			} else {
+				blockChan <- &Block{
+					offset:      lB.Offset,
+					isZeroBlock: true,
+				}
+				l++
+			}
+		}
+	}()
+
+	return blockChan, errChan
+}
+
+func populateBlocksForFullRestore(bsDriver BackupStoreDriver, backup *Backup) (<-chan *Block, <-chan error) {
+	blockChan := make(chan *Block, 10)
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer close(blockChan)
+		defer close(errChan)
+
+		for _, block := range backup.Blocks {
+			blockChan <- &Block{
+				offset:            block.Offset,
+				blockChecksum:     block.BlockChecksum,
+				compressionMethod: backup.CompressionMethod,
+			}
+		}
+	}()
+
+	return blockChan, errChan
+}
+
+func restoreBlock(bsDriver BackupStoreDriver, config *DeltaRestoreConfig,
+	volumeName string, volDev *os.File, block *Block, progress *progress) error {
+	deltaOps := config.DeltaOps
+
+	defer func() {
+		progress.Lock()
+		defer progress.Unlock()
+
+		progress.processedBlockCounts++
+		progress.progress = getProgress(progress.totalBlockCounts, progress.processedBlockCounts)
+		deltaOps.UpdateRestoreStatus(volumeName, progress.progress, nil)
+	}()
+
+	if block.isZeroBlock {
+		return fillZeros(volDev, block.offset, DEFAULT_BLOCK_SIZE)
 	}
-	return nil
+
+	return restoreBlockToFile(bsDriver, volumeName, volDev, block.compressionMethod,
+		BlockMapping{
+			Offset:        block.offset,
+			BlockChecksum: block.blockChecksum,
+		})
+}
+
+func restoreBlocks(ctx context.Context, bsDriver BackupStoreDriver, config *DeltaRestoreConfig,
+	volumeName string, in <-chan *Block, progress *progress) <-chan error {
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer close(errChan)
+
+		volDevName := config.Filename
+		volDev, err := os.OpenFile(volDevName, os.O_RDWR, 0666)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		defer volDev.Close()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case block, open := <-in:
+				if !open {
+					return
+				}
+
+				if err := restoreBlock(bsDriver, config, volumeName, volDev, block, progress); err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}
+	}()
+
+	return errChan
+}
+
+func performIncrementalRestore(bsDriver BackupStoreDriver, config *DeltaRestoreConfig,
+	srcVolumeName, volDevName string, lastBackup *Backup, backup *Backup) error {
+	var err error
+	concurrentLimit := config.ConcurrentLimit
+
+	progress := &progress{
+		totalBlockCounts: int64(len(backup.Blocks) + len(lastBackup.Blocks)),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	blockChan, errChan := populateBlocksForIncrementalRestore(bsDriver, lastBackup, backup)
+
+	errorChans := []<-chan error{errChan}
+	for i := 0; i < int(concurrentLimit); i++ {
+		errorChans = append(errorChans, restoreBlocks(ctx, bsDriver, config, srcVolumeName, blockChan, progress))
+	}
+
+	mergedErrChan := mergeErrorChannels(ctx, errorChans...)
+	err = <-mergedErrChan
+
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to incrementally restore volume %v backup %v", srcVolumeName, backup.Name)
+	}
+
+	return err
+}
+
+func fillZeros(volDev *os.File, offset, length int64) error {
+	return syscall.Fallocate(int(volDev.Fd()), 0, offset, length)
 }
 
 func DeleteBackupVolume(volumeName string, destURL string) error {
@@ -1155,10 +1292,7 @@ func cleanupBlocks(driver BackupStoreDriver, blockMap map[string]*BlockInfo, vol
 
 	// update the block count to what we actually have on disk that is in use
 	v.BlockCount = activeBlockCount
-	if err := saveVolume(driver, v); err != nil {
-		return err
-	}
-	return nil
+	return saveVolume(driver, v)
 }
 
 func getBlockNamesForVolume(driver BackupStoreDriver, volumeName string) ([]string, error) {
