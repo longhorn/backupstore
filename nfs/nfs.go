@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/longhorn/backupstore"
 	"github.com/longhorn/backupstore/fsops"
 	"github.com/longhorn/backupstore/util"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var (

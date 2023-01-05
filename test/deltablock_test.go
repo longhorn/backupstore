@@ -57,11 +57,11 @@ func (s *TestSuite) TestDeleteDeltaBlockBackup(c *C) {
 		backups := make(map[int]string)
 		for i := 0; i < snapshotCounts; i++ {
 			config := &backupstore.DeltaBackupConfig{
-				Volume:                &volume.v,
-				Snapshot:              &volume.Snapshots[i],
-				DestURL:               s.getDestURL(),
-				DeltaOps:              &volume,
-				ConcurrentUploadLimit: int32(concurrentLimit),
+				Volume:          &volume.v,
+				Snapshot:        &volume.Snapshots[i],
+				DestURL:         s.getDestURL(),
+				DeltaOps:        &volume,
+				ConcurrentLimit: int32(concurrentLimit),
 				Labels: map[string]string{
 					"SnapshotName": volume.Snapshots[i].Name,
 					"RandomKey":    "RandomValue",

@@ -323,12 +323,12 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		backupN := ""
 		for i := 0; i < snapshotCounts; i++ {
 			config := &backupstore.DeltaBackupConfig{
-				BackupName:            util.GenerateName("backup"),
-				Volume:                &volume.v,
-				Snapshot:              &volume.Snapshots[i],
-				DestURL:               s.getDestURL(),
-				DeltaOps:              &volume,
-				ConcurrentUploadLimit: int32(concurrentLimit),
+				BackupName:      util.GenerateName("backup"),
+				Volume:          &volume.v,
+				Snapshot:        &volume.Snapshots[i],
+				DestURL:         s.getDestURL(),
+				DeltaOps:        &volume,
+				ConcurrentLimit: int32(concurrentLimit),
 				Labels: map[string]string{
 					"SnapshotName": volume.Snapshots[i].Name,
 					"RandomKey":    "RandomValue",
@@ -341,9 +341,10 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 
 			restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
 			rConfig := &backupstore.DeltaRestoreConfig{
-				BackupURL: backup,
-				DeltaOps:  &volume,
-				Filename:  restore,
+				BackupURL:       backup,
+				DeltaOps:        &volume,
+				Filename:        restore,
+				ConcurrentLimit: int32(concurrentLimit),
 			}
 			err := backupstore.RestoreDeltaBlockBackup(rConfig)
 			c.Assert(err, IsNil)
@@ -553,11 +554,11 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		restoreIncre := filepath.Join(s.BasePath, "restore-incre-file")
 		for i := 0; i < snapshotCounts; i++ {
 			config := &backupstore.DeltaBackupConfig{
-				Volume:                &volume.v,
-				Snapshot:              &volume.Snapshots[i],
-				DestURL:               s.getDestURL(),
-				DeltaOps:              &volume,
-				ConcurrentUploadLimit: int32(concurrentLimit),
+				Volume:          &volume.v,
+				Snapshot:        &volume.Snapshots[i],
+				DestURL:         s.getDestURL(),
+				DeltaOps:        &volume,
+				ConcurrentLimit: int32(concurrentLimit),
 				Labels: map[string]string{
 					"SnapshotName": volume.Snapshots[i].Name,
 					"RandomKey":    "RandomValue",
@@ -566,9 +567,10 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 			backup := s.createAndWaitForBackup(c, config, &volume)
 			restore := filepath.Join(s.BasePath, "restore-"+strconv.Itoa(i))
 			rConfig := &backupstore.DeltaRestoreConfig{
-				BackupURL: backup,
-				DeltaOps:  &volume,
-				Filename:  restore,
+				BackupURL:       backup,
+				DeltaOps:        &volume,
+				Filename:        restore,
+				ConcurrentLimit: int32(concurrentLimit),
 			}
 
 			err := backupstore.RestoreDeltaBlockBackup(rConfig)
@@ -579,10 +581,11 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 			c.Assert(err, IsNil)
 
 			rConfig = &backupstore.DeltaRestoreConfig{
-				BackupURL:      backup,
-				DeltaOps:       &volume,
-				LastBackupName: lastBackupName,
-				Filename:       restoreIncre,
+				BackupURL:       backup,
+				DeltaOps:        &volume,
+				LastBackupName:  lastBackupName,
+				Filename:        restoreIncre,
+				ConcurrentLimit: int32(concurrentLimit),
 			}
 
 			err = backupstore.RestoreDeltaBlockBackupIncrementally(rConfig)
