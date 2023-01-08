@@ -32,14 +32,15 @@ type VolumeInfo struct {
 }
 
 type BackupInfo struct {
-	Name            string
-	URL             string
-	SnapshotName    string
-	SnapshotCreated string
-	Created         string
-	Size            int64 `json:",string"`
-	Labels          map[string]string
-	IsIncremental   bool
+	Name              string
+	URL               string
+	SnapshotName      string
+	SnapshotCreated   string
+	Created           string
+	Size              int64 `json:",string"`
+	Labels            map[string]string
+	IsIncremental     bool
+	CompressionMethod string `json:",omitempty"`
 
 	VolumeName             string `json:",omitempty"`
 	VolumeSize             int64  `json:",string,omitempty"`
