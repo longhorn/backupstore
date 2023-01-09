@@ -129,9 +129,5 @@ func DeleteSingleFileBackup(backupURL string) error {
 		return err
 	}
 
-	if err := removeBackup(backup, driver); err != nil {
-		return err
-	}
-
-	return nil
+	return removeBackup(backup, driver)
 }

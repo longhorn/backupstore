@@ -82,7 +82,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	}
 	b.destURL += "/" + b.path
 
-	log.Debugf("Loaded driver for %v", b.destURL)
+	log.Infof("Loaded driver for %v", b.destURL)
 	return b, nil
 }
 
@@ -214,8 +214,5 @@ func (s *BackupStoreDriver) Download(src, dst string) error {
 	defer rc.Close()
 
 	_, err = io.Copy(f, rc)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }

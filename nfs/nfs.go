@@ -77,7 +77,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	}
 
 	b.destURL = KIND + "://" + b.serverPath
-	log.Debugf("Loaded driver for %v", b.destURL)
+	log.Infof("Loaded driver for %v", b.destURL)
 	return b, nil
 }
 

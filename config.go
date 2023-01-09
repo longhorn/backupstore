@@ -284,6 +284,6 @@ func removeBackup(backup *Backup, bsDriver BackupStoreDriver) error {
 	if err := bsDriver.Remove(filePath); err != nil {
 		return err
 	}
-	log.Debugf("Removed %v on backupstore", filePath)
+	log.Infof("Removed %v on backupstore", filePath)
 	return nil
 }

@@ -173,12 +173,7 @@ func downloadSystemBackup(c *cli.Context) error {
 		return err
 	}
 
-	err = systembackup.Download(destination, cfg)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return systembackup.Download(destination, cfg)
 }
 
 func listSystemBackup(c *cli.Context) error {
