@@ -184,10 +184,8 @@ func (r *RawFileVolume) ReadSnapshot(id, volumeID string, start int64, data []by
 		return err
 	}
 
-	if _, err := f.ReadAt(data, start); err != nil {
-		return err
-	}
-	return nil
+	_, err = f.ReadAt(data, start)
+	return err
 }
 
 func (r *RawFileVolume) CloseSnapshot(id, volumeID string) error {

@@ -723,10 +723,7 @@ func DeleteBackupVolume(volumeName string, destURL string) error {
 		return err
 	}
 	defer lock.Unlock()
-	if err := removeVolume(volumeName, bsDriver); err != nil {
-		return err
-	}
-	return nil
+	return removeVolume(volumeName, bsDriver)
 }
 
 func checkBlockReferenceCount(blockInfos map[string]*BlockInfo, backup *Backup, volumeName string, driver BackupStoreDriver) {

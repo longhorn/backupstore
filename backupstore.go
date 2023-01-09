@@ -64,9 +64,7 @@ func addVolume(volume *Volume, driver BackupStoreDriver) error {
 		log.WithError(err).Errorf("Failed to add volume %v", volume.Name)
 		return err
 	}
-	log.Debug("Added backupstore volume ", volume.Name)
-
-	log.Debugf("Added backupstore volume %v", volume.Name)
+	log.Infof("Added backupstore volume %v", volume.Name)
 	return nil
 }
 
@@ -92,8 +90,8 @@ func removeVolume(volumeName string, driver BackupStoreDriver) error {
 		return errors.Wrapf(err, "failed to remove backup volume %v directory in backupstore", volumeName)
 	}
 
-	log.Debug("Removed volume directory in backupstore: ", volumeDir)
-	log.Debug("Removed backupstore volume ", volumeName)
+	log.Infof("Removed volume directory in backupstore %v", volumeDir)
+	log.Infof("Removed backupstore volume %v", volumeName)
 
 	return nil
 }
