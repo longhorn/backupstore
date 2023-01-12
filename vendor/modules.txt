@@ -73,11 +73,16 @@ github.com/stretchr/testify/assert
 github.com/urfave/cli
 # golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
 golang.org/x/crypto/ssh/terminal
+# golang.org/x/net v0.0.0-20200202094626-16171245cfb2
+golang.org/x/net/http/httpproxy
+golang.org/x/net/idna
 # golang.org/x/sys v0.0.0-20190412213103-97732733099d
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.3
+golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 # gopkg.in/check.v1 v1.0.0-20160105164936-4f90aeace3a2
 gopkg.in/check.v1
