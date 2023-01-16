@@ -144,10 +144,6 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (backupID string, isIncre
 		return "", false, err
 	}
 
-	// Backward compatibility
-	if volume.CompressionMethod == "" {
-		volume.CompressionMethod = LEGACY_COMPRESSION_METHOD
-	}
 	config.Volume.CompressionMethod = volume.CompressionMethod
 
 	if err := deltaOps.OpenSnapshot(snapshot.Name, volume.Name); err != nil {

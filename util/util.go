@@ -123,7 +123,7 @@ func newDecompressionReader(method string, r io.Reader) (io.ReadCloser, error) {
 	case "lz4":
 		return ioutil.NopCloser(lz4.NewReader(r)), nil
 	default:
-		return nil, fmt.Errorf("unsupported compression method: %v", method)
+		return nil, fmt.Errorf("unsupported decompression method: %v", method)
 	}
 }
 
