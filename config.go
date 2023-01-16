@@ -220,6 +220,11 @@ func loadVolume(driver BackupStoreDriver, volumeName string) (*Volume, error) {
 	if err := LoadConfigInBackupStore(driver, file, v); err != nil {
 		return nil, err
 	}
+	// Backward compatibility
+	if v.CompressionMethod == "" {
+		log.Infof("Fall back compression method to %v for volume %v", LEGACY_COMPRESSION_METHOD, v.Name)
+		v.CompressionMethod = LEGACY_COMPRESSION_METHOD
+	}
 	return v, nil
 }
 
@@ -255,6 +260,11 @@ func loadBackup(bsDriver BackupStoreDriver, backupName, volumeName string) (*Bac
 	backup := &Backup{}
 	if err := LoadConfigInBackupStore(bsDriver, getBackupConfigPath(backupName, volumeName), backup); err != nil {
 		return nil, err
+	}
+	// Backward compatibility
+	if backup.CompressionMethod == "" {
+		log.Infof("Fall back compression method to %v for backup %v", LEGACY_COMPRESSION_METHOD, backup.Name)
+		backup.CompressionMethod = LEGACY_COMPRESSION_METHOD
 	}
 	return backup, nil
 }
