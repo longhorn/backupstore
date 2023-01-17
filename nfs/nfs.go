@@ -7,11 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/wait"
+	mount "k8s.io/mount-utils"
+
 	"github.com/longhorn/backupstore"
 	"github.com/longhorn/backupstore/fsops"
 	"github.com/longhorn/backupstore/util"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -82,7 +86,12 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 }
 
 func (b *BackupStoreDriver) mount() (err error) {
-	if util.IsMounted(b.mountDir) {
+	mounter := mount.NewWithoutSystemd("")
+
+	if mounted, err := mounter.IsMountPoint(b.mountDir); err != nil {
+		return err
+	} else if mounted {
+		log.Debugf("NFS share %v is already mounted on %v", b.destURL, b.mountDir)
 		return nil
 	}
 
@@ -90,7 +99,25 @@ func (b *BackupStoreDriver) mount() (err error) {
 
 	for _, version := range MinorVersions {
 		log.Debugf("Attempting mount for nfs path %v with nfsvers %v", b.serverPath, version)
-		_, err = util.ExecuteWithCustomTimeout("mount", []string{"-t", "nfs4", "-o", fmt.Sprintf("nfsvers=%v", version), "-o", "actimeo=1", b.serverPath, b.mountDir}, defaultTimeout)
+
+		mountOptions := []string{
+			fmt.Sprintf("nfsvers=%v", version),
+			"actimeo=1",
+		}
+		sensitiveMountOptions := []string{}
+
+		log.Infof("Mounting NFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, mountOptions)
+
+		mountComplete := false
+		err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (bool, error) {
+			err := mounter.MountSensitiveWithoutSystemd(b.serverPath, b.mountDir, "nfs4", mountOptions, sensitiveMountOptions)
+			mountComplete = true
+			return true, err
+		})
+		if !mountComplete {
+			err = errors.Wrapf(err, "mounting NFS share %v on %v timed out", b.destURL, b.mountDir)
+		}
+
 		if err == nil {
 			return nil
 		}
