@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	mount "k8s.io/mount-utils"
 
 	"github.com/longhorn/backupstore"
@@ -20,8 +19,9 @@ import (
 )
 
 var (
-	log            = logrus.WithFields(logrus.Fields{"pkg": "cifs"})
-	defaultTimeout = 5 * time.Second
+	log                  = logrus.WithFields(logrus.Fields{"pkg": "cifs"})
+	defaultMountInterval = 1 * time.Second
+	defaultMountTimeout  = 5 * time.Second
 )
 
 type BackupStoreDriver struct {
@@ -108,16 +108,8 @@ func (b *BackupStoreDriver) mount() error {
 
 	log.Infof("Mounting CIFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, mountOptions)
 
-	mountComplete := false
-	err = wait.PollImmediate(1*time.Second, defaultTimeout, func() (bool, error) {
-		err := mounter.MountSensitiveWithoutSystemd("//"+b.serverPath, b.mountDir, KIND, mountOptions, sensitiveMountOptions)
-		mountComplete = true
-		return true, err
-	})
-	if !mountComplete {
-		return errors.Wrapf(err, "mounting CIFS share %v on %v timed out", b.destURL, b.mountDir)
-	}
-	return err
+	return util.MountWithTimeout(mounter, "//"+b.serverPath, b.mountDir, KIND, mountOptions, sensitiveMountOptions,
+		defaultMountInterval, defaultMountTimeout)
 }
 
 func (b *BackupStoreDriver) Kind() string {
