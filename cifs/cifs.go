@@ -62,7 +62,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 		return nil, fmt.Errorf("BUG: Why dispatch %v to %v?", u.Scheme, KIND)
 	}
 	if u.Host == "" {
-		return nil, fmt.Errorf("CIFS path must follow: cifs://server/path/ format")
+		return nil, fmt.Errorf("CIFS path must follow format: cifs://<server-address>/<share-name>/")
 	}
 	if u.Path == "" {
 		return nil, fmt.Errorf("cannot find CIFS path")
@@ -73,10 +73,6 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	b.serverPath = u.Host + u.Path
 	b.mountDir = filepath.Join(MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
 	b.destURL = KIND + "://" + b.serverPath
-
-	if _, err = util.ExecuteWithCustomTimeout("mkdir", []string{"-m", "700", "-p", b.mountDir}, defaultTimeout); err != nil {
-		return nil, errors.Wrapf(err, "cannot create mount directory %v for CIFS server", b.mountDir)
-	}
 
 	if err := b.mount(); err != nil {
 		return nil, errors.Wrapf(err, "cannot mount CIFS share %v", b.serverPath)
@@ -94,14 +90,17 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 func (b *BackupStoreDriver) mount() error {
 	mounter := mount.NewWithoutSystemd("")
 
-	if mounted, err := mounter.IsMountPoint(b.mountDir); err != nil {
+	mounted, err := util.EnsureMountPoint(KIND, b.mountDir, mounter, log)
+	if err != nil {
 		return err
-	} else if mounted {
-		log.Debugf("CIFS share %v is already mounted on %v", b.destURL, b.mountDir)
+	}
+	if mounted {
 		return nil
 	}
 
-	mountOptions := []string{}
+	mountOptions := []string{
+		"soft",
+	}
 	sensitiveMountOptions := []string{
 		fmt.Sprintf("username=%v", b.username),
 		fmt.Sprintf("password=%v", b.password),
@@ -110,7 +109,7 @@ func (b *BackupStoreDriver) mount() error {
 	log.Infof("Mounting CIFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, mountOptions)
 
 	mountComplete := false
-	err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (bool, error) {
+	err = wait.PollImmediate(1*time.Second, defaultTimeout, func() (bool, error) {
 		err := mounter.MountSensitiveWithoutSystemd("//"+b.serverPath, b.mountDir, KIND, mountOptions, sensitiveMountOptions)
 		mountComplete = true
 		return true, err
