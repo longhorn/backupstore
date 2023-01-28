@@ -10,7 +10,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	mount "k8s.io/mount-utils"
 
 	"github.com/longhorn/backupstore"
@@ -19,9 +18,10 @@ import (
 )
 
 var (
-	log            = logrus.WithFields(logrus.Fields{"pkg": "nfs"})
-	MinorVersions  = []string{"4.2", "4.1", "4.0"}
-	defaultTimeout = 5 * time.Second
+	log                  = logrus.WithFields(logrus.Fields{"pkg": "nfs"})
+	MinorVersions        = []string{"4.2", "4.1", "4.0"}
+	defaultMountInterval = 1 * time.Second
+	defaultMountTimeout  = 5 * time.Second
 )
 
 type BackupStoreDriver struct {
@@ -110,16 +110,8 @@ func (b *BackupStoreDriver) mount() error {
 
 		log.Infof("Mounting NFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, mountOptions)
 
-		mountComplete := false
-		err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (bool, error) {
-			err := mounter.MountSensitiveWithoutSystemd(b.serverPath, b.mountDir, "nfs4", mountOptions, sensitiveMountOptions)
-			mountComplete = true
-			return true, err
-		})
-		if !mountComplete {
-			err = errors.Wrapf(err, "mounting NFS share %v on %v timed out", b.destURL, b.mountDir)
-		}
-
+		err := util.MountWithTimeout(mounter, b.serverPath, b.mountDir, "nfs4", mountOptions, sensitiveMountOptions,
+			defaultMountInterval, defaultMountTimeout)
 		if err == nil {
 			return nil
 		}
