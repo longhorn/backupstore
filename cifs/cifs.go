@@ -19,7 +19,9 @@ import (
 )
 
 var (
-	log                  = logrus.WithFields(logrus.Fields{"pkg": "cifs"})
+	log = logrus.WithFields(logrus.Fields{"pkg": "cifs"})
+
+	// Ref: https://github.com/longhorn/backupstore/pull/91
 	defaultMountInterval = 1 * time.Second
 	defaultMountTimeout  = 5 * time.Second
 )

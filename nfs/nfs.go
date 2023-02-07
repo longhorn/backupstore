@@ -18,8 +18,10 @@ import (
 )
 
 var (
-	log                  = logrus.WithFields(logrus.Fields{"pkg": "nfs"})
-	MinorVersions        = []string{"4.2", "4.1", "4.0"}
+	log           = logrus.WithFields(logrus.Fields{"pkg": "nfs"})
+	MinorVersions = []string{"4.2", "4.1", "4.0"}
+
+	// Ref: https://github.com/longhorn/backupstore/pull/91
 	defaultMountInterval = 1 * time.Second
 	defaultMountTimeout  = 5 * time.Second
 )
