@@ -201,3 +201,86 @@ func IsMounted(mountPoint string) bool {
 	}
 	return false
 }
+<<<<<<< HEAD
+=======
+
+func cleanupMount(mountDir string, mounter mount.Interface, log logrus.FieldLogger) error {
+	forceUnmounter, ok := mounter.(mount.MounterForceUnmounter)
+	if ok {
+		log.Infof("Trying to force clean up mount point %v", mountDir)
+		return mount.CleanupMountWithForce(mountDir, forceUnmounter, false, forceCleanupMountTimeout)
+	}
+
+	log.Infof("Trying to clean up mount point %v", mountDir)
+	return mount.CleanupMountPoint(mountDir, forceUnmounter, false)
+}
+
+func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logrus.FieldLogger) (mounted bool, err error) {
+	defer func() {
+		if !mounted && err == nil {
+			if mkdirErr := os.MkdirAll(mountPoint, 0700); mkdirErr != nil {
+				err = errors.Wrapf(err, "cannot create mount directory %v", mountPoint)
+			}
+		}
+	}()
+
+	mounted, err = mounter.IsMountPoint(mountPoint)
+	if err != nil {
+		if strings.Contains(err.Error(), syscall.ENOENT.Error()) {
+			return false, nil
+		}
+	}
+
+	IsCorruptedMnt := mount.IsCorruptedMnt(err)
+	if !IsCorruptedMnt {
+		logrus.Warnf("Mount point %v is trying reading dir to make sure it is healthy", mountPoint)
+		if _, readErr := ioutil.ReadDir(mountPoint); readErr != nil {
+			logrus.WithError(readErr).Warnf("Mount point %v was identified as corrupt by ReadDir", mountPoint)
+			IsCorruptedMnt = true
+		}
+	}
+
+	if IsCorruptedMnt {
+		log.Warnf("Failed to check mount point %v (mounted=%v)", mountPoint, mounted)
+		if mntErr := cleanupMount(mountPoint, mounter, log); mntErr != nil {
+			return true, errors.Wrapf(mntErr, "failed to clean up corrupted mount point %v", mountPoint)
+		}
+		mounted = false
+	}
+
+	if !mounted {
+		return false, nil
+	}
+
+	mnt, err := fs.GetMount(mountPoint)
+	if err != nil {
+		return true, errors.Wrapf(err, "failed to get mount for %v", mountPoint)
+	}
+
+	if strings.Contains(mnt.FilesystemType, Kind) {
+		return true, nil
+	}
+
+	log.Warnf("Cleaning up the mount point %v because the fstype %v is changed to %v", mountPoint, mnt.FilesystemType, Kind)
+
+	if mntErr := cleanupMount(mountPoint, mounter, log); mntErr != nil {
+		return true, errors.Wrapf(mntErr, "failed to clean up mount point %v (%v) for %v protocol", mnt.FilesystemType, mountPoint, Kind)
+	}
+
+	return false, nil
+}
+
+func MountWithTimeout(mounter mount.Interface, source string, target string, fstype string,
+	options []string, sensitiveOptions []string, interval, timeout time.Duration) error {
+	mountComplete := false
+	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
+		err := mounter.MountSensitiveWithoutSystemd(source, target, fstype, options, sensitiveOptions)
+		mountComplete = true
+		return true, err
+	})
+	if !mountComplete {
+		return errors.Wrapf(err, "mounting %v share %v on %v timed out", fstype, source, target)
+	}
+	return err
+}
+>>>>>>> 3912081 (Return error if mount failed)
