@@ -36,8 +36,7 @@ type BackupStoreDriver struct {
 const (
 	KIND = "nfs"
 
-	NfsPath  = "nfs.path"
-	MountDir = "/var/lib/longhorn-backupstore-mounts"
+	NfsPath = "nfs.path"
 
 	MaxCleanupLevel = 10
 
@@ -71,7 +70,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 
 	b.serverPath = u.Host + u.Path
 	b.destURL = KIND + "://" + b.serverPath
-	b.mountDir = filepath.Join(MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
+	b.mountDir = filepath.Join(util.MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
 
 	if err := b.mount(); err != nil {
 		return nil, errors.Wrapf(err, "cannot mount nfs %v", b.serverPath)
@@ -88,12 +87,19 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 func (b *BackupStoreDriver) mount() error {
 	mounter := mount.New(b.mountDir)
 
+	// EnsureMountPoint check if the mount point is already mounted and clean up the corrupted mount point.
 	mounted, err := util.EnsureMountPoint(KIND, b.mountDir, mounter, log)
 	if err != nil {
 		return err
 	}
 	if mounted {
 		return nil
+	}
+
+	// To avoid the instability caused by the orphaned mount point, clean up the orphaned mount points
+	err = util.CleanUpMountPoints(mounter, log)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to clean up mount points")
 	}
 
 	retErr := errors.New("cannot mount using NFSv4")

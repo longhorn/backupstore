@@ -103,6 +103,12 @@ github.com/stretchr/testify/assert
 # github.com/urfave/cli v1.22.5
 ## explicit; go 1.11
 github.com/urfave/cli
+# go.uber.org/atomic v1.7.0
+## explicit; go 1.13
+go.uber.org/atomic
+# go.uber.org/multierr v1.9.0
+## explicit; go 1.19
+go.uber.org/multierr
 # golang.org/x/crypto v0.0.0-20220408190544-5352b0902921
 ## explicit; go 1.17
 golang.org/x/crypto/ssh/terminal
