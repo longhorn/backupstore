@@ -35,7 +35,7 @@ func TestGetSystemBackupURL(t *testing.T) {
 		},
 		{
 			backupTarget: "://backupstore@minio",
-			expectError:  "parse ://backupstore@minio: missing protocol scheme",
+			expectError:  "parse \"://backupstore@minio\": missing protocol scheme",
 		},
 	}
 
