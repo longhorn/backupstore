@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -205,7 +204,7 @@ func (s *TestSuite) randomChange(data []byte, offset, length int64) {
 func (s *TestSuite) SetUpSuite(c *C) {
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	dir, err := ioutil.TempDir("", "backupstore-test")
+	dir, err := os.MkdirTemp("", "backupstore-test")
 	c.Assert(err, IsNil)
 
 	s.BasePath = dir
@@ -314,7 +313,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 					CreatedTime: util.Now(),
 				})
 
-			err := ioutil.WriteFile(snapName, data, 0600)
+			err := os.WriteFile(snapName, data, 0600)
 			c.Assert(err, IsNil)
 
 			s.randomChange(data, int64(i)*blockSize, 10)

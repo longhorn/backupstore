@@ -110,7 +110,7 @@ func DecompressAndVerify(method string, src io.Reader, checksum string) (io.Read
 		return nil, err
 	}
 	defer r.Close()
-	block, err := ioutil.ReadAll(r)
+	block, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -134,11 +134,11 @@ func newCompressionWriter(method string, buffer io.Writer) (io.WriteCloser, erro
 func newDecompressionReader(method string, r io.Reader) (io.ReadCloser, error) {
 	switch method {
 	case "none":
-		return ioutil.NopCloser(r), nil
+		return io.NopCloser(r), nil
 	case "gzip":
 		return gzip.NewReader(r)
 	case "lz4":
-		return ioutil.NopCloser(lz4.NewReader(r)), nil
+		return io.NopCloser(lz4.NewReader(r)), nil
 	default:
 		return nil, fmt.Errorf("unsupported decompression method: %v", method)
 	}

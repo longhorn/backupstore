@@ -1,7 +1,7 @@
 package util
 
 import (
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"os/exec"
 	"path/filepath"
@@ -70,7 +70,7 @@ func (s *TestSuite) TestCompress(c *C) {
 		decompressed, err := DecompressAndVerify(compressionMethod, compressed, checksum)
 		c.Assert(err, IsNil)
 
-		result, err := ioutil.ReadAll(decompressed)
+		result, err := io.ReadAll(decompressed)
 		c.Assert(err, IsNil)
 
 		c.Assert(result, DeepEquals, data)

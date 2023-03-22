@@ -1,8 +1,8 @@
 package test
 
 import (
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"strconv"
 
 	. "gopkg.in/check.v1"
@@ -48,7 +48,7 @@ func (s *TestSuite) TestDeleteDeltaBlockBackup(c *C) {
 				},
 			)
 
-			err := ioutil.WriteFile(snapName, data, 0600)
+			err := os.WriteFile(snapName, data, 0600)
 			c.Assert(err, IsNil)
 
 			s.randomChange(data, int64(0)*blockSize, 10)

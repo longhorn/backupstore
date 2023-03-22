@@ -46,10 +46,6 @@ func (m *mockStoreDriver) GetURL() string {
 	return m.destURL
 }
 
-func (m *mockStoreDriver) updatePath(path string) string {
-	return ""
-}
-
 func (m *mockStoreDriver) List(listPath string) ([]string, error) {
 	defer time.Sleep(m.delay)
 
