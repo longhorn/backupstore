@@ -85,7 +85,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 }
 
 func (b *BackupStoreDriver) mount() error {
-	mounter := mount.New(b.mountDir)
+	mounter := mount.New("")
 
 	// EnsureMountPoint check if the mount point is already mounted and clean up the corrupted mount point.
 	mounted, err := util.EnsureMountPoint(KIND, b.mountDir, mounter, log)
