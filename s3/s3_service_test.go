@@ -5,7 +5,6 @@ package s3
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -59,7 +58,7 @@ func (s *TestSuite) TestFuncs(c *C) {
 	r, err := s.service.GetObject(key1)
 	c.Assert(err, IsNil)
 
-	newBody, err := ioutil.ReadAll(r)
+	newBody, err := io.ReadAll(r)
 	c.Assert(err, IsNil)
 	c.Assert(newBody, DeepEquals, body)
 
