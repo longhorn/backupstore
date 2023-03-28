@@ -56,6 +56,7 @@ type RawFileVolume struct {
 	lock            sync.Mutex
 	v               backupstore.Volume
 	Snapshots       []backupstore.Snapshot
+	BackupState     string
 	BackupProgress  int
 	BackupError     string
 	BackupURL       string
@@ -63,8 +64,9 @@ type RawFileVolume struct {
 	RestoreError    error
 }
 
-func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, backupProgress int, backupURL string, backupError string) error {
+func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, backupState string, backupProgress int, backupURL string, backupError string) error {
 	r.lock.Lock()
+	r.BackupState = backupState
 	r.BackupProgress = backupProgress
 	r.BackupURL = backupURL
 	r.BackupError = backupError
