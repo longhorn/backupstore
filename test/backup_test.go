@@ -55,6 +55,7 @@ type RawFileVolume struct {
 	lock            sync.Mutex
 	v               backupstore.Volume
 	Snapshots       []backupstore.Snapshot
+	BackupState     string
 	BackupProgress  int
 	BackupError     string
 	BackupURL       string
@@ -62,8 +63,9 @@ type RawFileVolume struct {
 	RestoreError    error
 }
 
-func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, backupProgress int, backupURL string, backupError string) error {
+func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, backupState string, backupProgress int, backupURL string, backupError string) error {
 	r.lock.Lock()
+	r.BackupState = backupState
 	r.BackupProgress = backupProgress
 	r.BackupURL = backupURL
 	r.BackupError = backupError
@@ -232,8 +234,16 @@ func (s *TestSuite) getDestURL() string {
 	return "nfs://127.0.0.1:/opt/backupstore"
 }
 
+func getBackupNameFromBackupNameInConfig(backupNameInConfig string) string {
+	if backupNameInConfig == "" {
+		return util.GenerateName("backup")
+	}
+	return backupNameInConfig
+}
+
 func (s *TestSuite) createAndWaitForBackup(c *C, config *backupstore.DeltaBackupConfig, deltaOps *RawFileVolume) string {
-	backupName, _, err := backupstore.CreateDeltaBlockBackup(config)
+	backupName := getBackupNameFromBackupNameInConfig(config.BackupName)
+	_, err := backupstore.CreateDeltaBlockBackup(backupName, config)
 	c.Assert(err, IsNil)
 	if config.BackupName != "" {
 		c.Assert(backupName, Equals, config.BackupName)
