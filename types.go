@@ -24,3 +24,8 @@ type MessageType string
 const (
 	MessageTypeError = MessageType("error")
 )
+
+type JobResult struct {
+	payload interface{}
+	err     error
+}
