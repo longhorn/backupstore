@@ -230,7 +230,7 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 		}
 	}()
 
-	notMounted, err := mount.IsNotMountPoint(mounter, mountPoint)
+	mounted, err = mounter.IsMountPoint(mountPoint)
 	if err != nil {
 		if strings.Contains(err.Error(), syscall.ENOENT.Error()) {
 			return false, nil
@@ -239,9 +239,9 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 
 	IsCorruptedMnt := mount.IsCorruptedMnt(err)
 	if !IsCorruptedMnt {
-		log.Warnf("Mount point %v is trying reading dir to make sure it is healthy", mountPoint)
+		logrus.Warnf("Mount point %v is trying reading dir to make sure it is healthy", mountPoint)
 		if _, readErr := ioutil.ReadDir(mountPoint); readErr != nil {
-			log.WithError(readErr).Warnf("Mount point %v was identified as corrupt by ReadDir", mountPoint)
+			logrus.WithError(readErr).Warnf("Mount point %v was identified as corrupt by ReadDir", mountPoint)
 			IsCorruptedMnt = true
 		}
 	}
@@ -251,10 +251,10 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 		if mntErr := cleanupMount(mountPoint, mounter, log); mntErr != nil {
 			return true, errors.Wrapf(mntErr, "failed to clean up corrupted mount point %v", mountPoint)
 		}
-		notMounted = true
+		mounted = false
 	}
 
-	if notMounted {
+	if !mounted {
 		return false, nil
 	}
 
