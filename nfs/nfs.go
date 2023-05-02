@@ -61,15 +61,17 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 		return nil, fmt.Errorf("BUG: Why dispatch %v to %v?", u.Scheme, KIND)
 	}
 	if u.Host == "" {
-		return nil, fmt.Errorf("NFS path must follow format: nfs://<server-address>:/<share-name>/")
+		return nil, fmt.Errorf("NFS path must follow: nfs://server:/path/ format")
 	}
 	if u.Path == "" {
 		return nil, fmt.Errorf("cannot find nfs path")
 	}
 
 	b.serverPath = u.Host + u.Path
-	b.destURL = KIND + "://" + b.serverPath
 	b.mountDir = filepath.Join(MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
+	if _, err = util.ExecuteWithCustomTimeout("mkdir", []string{"-m", "700", "-p", b.mountDir}, defaultTimeout); err != nil {
+		return nil, errors.Wrapf(err, "cannot create mount directory %v for NFS server", b.mountDir)
+	}
 
 	if err := b.mount(); err != nil {
 		return nil, errors.Wrapf(err, "cannot mount nfs %v", b.serverPath)
@@ -78,23 +80,22 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 		return nil, fmt.Errorf("NFS path %v doesn't exist or is not a directory", b.serverPath)
 	}
 
+	b.destURL = KIND + "://" + b.serverPath
 	log.Infof("Loaded driver for %v", b.destURL)
-
 	return b, nil
 }
 
-func (b *BackupStoreDriver) mount() error {
+func (b *BackupStoreDriver) mount() (err error) {
 	mounter := mount.NewWithoutSystemd("")
 
-	mounted, err := util.EnsureMountPoint(KIND, b.mountDir, mounter, log)
-	if err != nil {
+	if mounted, err := mounter.IsMountPoint(b.mountDir); err != nil {
 		return err
-	}
-	if mounted {
+	} else if mounted {
+		log.Debugf("NFS share %v is already mounted on %v", b.destURL, b.mountDir)
 		return nil
 	}
 
-	retErr := errors.New("cannot mount using NFSv4")
+	retErr := errors.New("Cannot mount using NFSv4")
 
 	for _, version := range MinorVersions {
 		log.Debugf("Attempting mount for nfs path %v with nfsvers %v", b.serverPath, version)
@@ -102,9 +103,6 @@ func (b *BackupStoreDriver) mount() error {
 		mountOptions := []string{
 			fmt.Sprintf("nfsvers=%v", version),
 			"actimeo=1",
-			"soft",
-			"timeo=300",
-			"retry=2",
 		}
 		sensitiveMountOptions := []string{}
 
