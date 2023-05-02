@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -22,7 +21,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"go.uber.org/multierr"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	mount "k8s.io/mount-utils"
@@ -30,8 +28,6 @@ import (
 
 const (
 	PreservedChecksumLength = 64
-
-	MountDir = "/var/lib/longhorn-backupstore-mounts"
 )
 
 var (
@@ -45,19 +41,16 @@ func GenerateName(prefix string) string {
 	return prefix + "-" + suffix[:16]
 }
 
-// NewUUID generates an UUID
 func NewUUID() string {
 	return uuid.New().String()
 }
 
-// GetChecksum gets the SHA256 of the given data
 func GetChecksum(data []byte) string {
 	checksumBytes := sha512.Sum512(data)
 	checksum := hex.EncodeToString(checksumBytes[:])[:PreservedChecksumLength]
 	return checksum
 }
 
-// GetFileChecksum calculates the SHA256 of the file's content
 func GetFileChecksum(filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -153,20 +146,17 @@ func ExtractNames(names []string, prefix, suffix string) []string {
 	return result
 }
 
-// ValidateName validate the given string
 func ValidateName(name string) bool {
 	validName := regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]+$`)
 	return validName.MatchString(name)
 }
 
-// Execute executes a command
 func Execute(binary string, args []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
 	return execute(ctx, binary, args)
 }
 
-// ExecuteWithCustomTimeout executes a command with a specified timeout
 func ExecuteWithCustomTimeout(binary string, args []string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -199,7 +189,6 @@ func execute(ctx context.Context, binary string, args []string) (string, error) 
 	return string(output), nil
 }
 
-// UnescapeURL converts a escape character to a normal one.
 func UnescapeURL(url string) string {
 	// Deal with escape in url inputted from bash
 	result := strings.Replace(url, "\\u0026", "&", 1)
@@ -207,7 +196,6 @@ func UnescapeURL(url string) string {
 	return result
 }
 
-// IsMounted checks if the mount point is mounted
 func IsMounted(mountPoint string) bool {
 	output, err := Execute("mount", []string{})
 	if err != nil {
@@ -233,7 +221,6 @@ func cleanupMount(mountDir string, mounter mount.Interface, log logrus.FieldLogg
 	return mount.CleanupMountPoint(mountDir, forceUnmounter, false)
 }
 
-// EnsureMountPoint checks if the mount point is valid. If it is invalid, clean up mount point.
 func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logrus.FieldLogger) (mounted bool, err error) {
 	defer func() {
 		if !mounted && err == nil {
@@ -289,7 +276,6 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 	return false, nil
 }
 
-// MountWithTimeout mounts the backup store to a given mount point with a specified timeout
 func MountWithTimeout(mounter mount.Interface, source string, target string, fstype string,
 	options []string, sensitiveOptions []string, interval, timeout time.Duration) error {
 	mountComplete := false
@@ -302,38 +288,4 @@ func MountWithTimeout(mounter mount.Interface, source string, target string, fst
 		return errors.Wrapf(err, "mounting %v share %v on %v timed out", fstype, source, target)
 	}
 	return err
-}
-
-// CleanUpMountPoints tries to clean up all existing mount points for existing backup stores
-func CleanUpMountPoints(mounter mount.Interface, log logrus.FieldLogger) error {
-	var errs error
-
-	filepath.Walk(MountDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			errs = multierr.Append(errs, errors.Wrapf(err, "failed to get file info of %v", path))
-			return nil
-		}
-
-		if !info.IsDir() {
-			return nil
-		}
-
-		notMounted, err := mount.IsNotMountPoint(mounter, path)
-		if err != nil {
-			errs = multierr.Append(errs, errors.Wrapf(err, "failed to check if %s is not mounted", path))
-			return nil
-		}
-
-		if notMounted {
-			return nil
-		}
-
-		if err := cleanupMount(path, mounter, log); err != nil {
-			errs = multierr.Append(errs, errors.Wrapf(err, "failed to clean up mount point %v", path))
-		}
-
-		return nil
-	})
-
-	return errs
 }
