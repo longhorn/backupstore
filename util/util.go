@@ -9,16 +9,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/google/fscrypt/filesystem"
+	fs "github.com/google/fscrypt/filesystem"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -244,15 +244,17 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 	}()
 
 	notMounted, err := mount.IsNotMountPoint(mounter, mountPoint)
-	if err == fs.ErrNotExist {
-		return false, nil
+	if err != nil {
+		if strings.Contains(err.Error(), syscall.ENOENT.Error()) {
+			return false, nil
+		}
 	}
 
 	IsCorruptedMnt := mount.IsCorruptedMnt(err)
 	if !IsCorruptedMnt {
-		log.Warnf("Trying reading mount point %v to make sure it is healthy", mountPoint)
-		if _, readErr := os.ReadDir(mountPoint); readErr != nil {
-			log.WithError(readErr).Warnf("Mount point %v was identified as corrupted by ReadDir", mountPoint)
+		log.Warnf("Mount point %v is trying reading dir to make sure it is healthy", mountPoint)
+		if _, readErr := ioutil.ReadDir(mountPoint); readErr != nil {
+			log.WithError(readErr).Warnf("Mount point %v was identified as corrupt by ReadDir", mountPoint)
 			IsCorruptedMnt = true
 		}
 	}
@@ -269,7 +271,7 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 		return false, nil
 	}
 
-	mnt, err := filesystem.GetMount(mountPoint)
+	mnt, err := fs.GetMount(mountPoint)
 	if err != nil {
 		return true, errors.Wrapf(err, "failed to get mount for %v", mountPoint)
 	}
