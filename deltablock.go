@@ -237,7 +237,14 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 		defer deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
 		defer lock.Unlock()
 
+<<<<<<< HEAD
 		if progress, backup, err := performBackup(config, delta, deltaBackup, backupRequest.lastBackup, bsDriver); err != nil {
+=======
+		deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(ProgressStateInProgress), 0, "", "")
+
+		if progress, backup, err := performBackup(bsDriver, config, delta, deltaBackup, backupRequest.lastBackup); err != nil {
+			logrus.WithError(err).Errorf("Failed to perform backup for volume %v snapshot %v", volume.Name, snapshot.Name)
+>>>>>>> f71b33a (Logging error if failed to back up a volume)
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(ProgressStateInProgress), progress, "", err.Error())
 		} else {
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(ProgressStateInProgress), progress, backup, "")
