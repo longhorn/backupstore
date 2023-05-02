@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	mount "k8s.io/mount-utils"
 )
 
@@ -274,18 +273,4 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 	}
 
 	return false, nil
-}
-
-func MountWithTimeout(mounter mount.Interface, source string, target string, fstype string,
-	options []string, sensitiveOptions []string, interval, timeout time.Duration) error {
-	mountComplete := false
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
-		err := mounter.MountSensitiveWithoutSystemd(source, target, fstype, options, sensitiveOptions)
-		mountComplete = true
-		return true, err
-	})
-	if !mountComplete {
-		return errors.Wrapf(err, "mounting %v share %v on %v timed out", fstype, source, target)
-	}
-	return nil
 }
