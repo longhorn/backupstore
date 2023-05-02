@@ -245,6 +245,7 @@ func CreateDeltaBlockBackup(backupName string, config *DeltaBackupConfig) (isInc
 		deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(ProgressStateInProgress), 0, "", "")
 
 		if progress, backup, err := performBackup(bsDriver, config, delta, deltaBackup, backupRequest.lastBackup); err != nil {
+			logrus.WithError(err).Errorf("Failed to perform backup for volume %v snapshot %v", volume.Name, snapshot.Name)
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(ProgressStateInProgress), progress, "", err.Error())
 		} else {
 			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(ProgressStateInProgress), progress, backup, "")
