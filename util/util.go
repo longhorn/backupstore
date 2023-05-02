@@ -12,16 +12,24 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/multierr"
+	mount "k8s.io/mount-utils"
 )
 
 const (
 	PreservedChecksumLength = 64
+
+	forceCleanupMountTimeout = 30 * time.Second
+
+	MountDir = "/var/lib/longhorn-backupstore-mounts"
 )
 
 var (
@@ -200,4 +208,49 @@ func IsMounted(mountPoint string) bool {
 		}
 	}
 	return false
+}
+
+func cleanupMount(mountDir string, mounter mount.Interface, log logrus.FieldLogger) error {
+	forceUnmounter, ok := mounter.(mount.MounterForceUnmounter)
+	if ok {
+		log.Infof("Trying to force clean up mount point %v", mountDir)
+		return mount.CleanupMountWithForce(mountDir, forceUnmounter, false, forceCleanupMountTimeout)
+	}
+
+	log.Infof("Trying to clean up mount point %v", mountDir)
+	return mount.CleanupMountPoint(mountDir, forceUnmounter, false)
+}
+
+// CleanUpMountPoints tries to clean up all existing mount points for existing backup stores
+func CleanUpMountPoints(mounter mount.Interface, log logrus.FieldLogger) error {
+	var errs error
+
+	filepath.Walk(MountDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			errs = multierr.Append(errs, errors.Wrapf(err, "failed to get file info of %v", path))
+			return nil
+		}
+
+		if !info.IsDir() {
+			return nil
+		}
+
+		notMounted, err := mount.IsNotMountPoint(mounter, path)
+		if err != nil {
+			errs = multierr.Append(errs, errors.Wrapf(err, "failed to check if %s is not mounted", path))
+			return nil
+		}
+
+		if notMounted {
+			return nil
+		}
+
+		if err := cleanupMount(path, mounter, log); err != nil {
+			errs = multierr.Append(errs, errors.Wrapf(err, "failed to clean up mount point %v", path))
+		}
+
+		return nil
+	})
+
+	return errs
 }

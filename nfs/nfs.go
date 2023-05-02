@@ -30,8 +30,7 @@ type BackupStoreDriver struct {
 const (
 	KIND = "nfs"
 
-	NfsPath  = "nfs.path"
-	MountDir = "/var/lib/longhorn-backupstore-mounts"
+	NfsPath = "nfs.path"
 
 	MaxCleanupLevel = 10
 
@@ -64,7 +63,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	}
 
 	b.serverPath = u.Host + u.Path
-	b.mountDir = filepath.Join(MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
+	b.mountDir = filepath.Join(util.MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
 	if _, err = util.ExecuteWithCustomTimeout("mkdir", []string{"-m", "700", "-p", b.mountDir}, defaultTimeout); err != nil {
 		return nil, errors.Wrapf(err, "cannot create mount directory %v for NFS server", b.mountDir)
 	}
