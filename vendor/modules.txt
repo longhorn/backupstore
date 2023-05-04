@@ -63,17 +63,11 @@ github.com/gammazero/workerpool
 github.com/go-logr/logr
 # github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
-github.com/golang/protobuf/jsonpb
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/google/fscrypt v0.3.3
-## explicit; go 1.11
-github.com/google/fscrypt/filesystem
-github.com/google/fscrypt/metadata
-github.com/google/fscrypt/util
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
@@ -150,8 +144,6 @@ go.uber.org/atomic
 # go.uber.org/multierr v1.9.0
 ## explicit; go 1.19
 go.uber.org/multierr
-# golang.org/x/crypto v0.1.0
-## explicit; go 1.17
 # golang.org/x/net v0.7.0
 ## explicit; go 1.17
 golang.org/x/net/http/httpproxy
@@ -169,14 +161,12 @@ golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 # google.golang.org/protobuf v1.28.1
 ## explicit; go 1.11
-google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
 google.golang.org/protobuf/internal/descopts
 google.golang.org/protobuf/internal/detrand
 google.golang.org/protobuf/internal/encoding/defval
-google.golang.org/protobuf/internal/encoding/json
 google.golang.org/protobuf/internal/encoding/messageset
 google.golang.org/protobuf/internal/encoding/tag
 google.golang.org/protobuf/internal/encoding/text
