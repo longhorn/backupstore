@@ -11,12 +11,15 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/pkg/errors"
+
+	"github.com/longhorn/backupstore/http"
 )
 
 const (
 	azureURL           = "core.windows.net"
 	azureConnNameKey   = "AccountName=%s;AccountKey=%s;"
 	blobEndpoint       = "BlobEndpoint=%s;"
+	blobEndpointScheme = "DefaultEndpointsProtocol=%s;"
 	blobEndpointSuffix = "EndpointSuffix=%s;"
 
 	downloadMaxRetryRequests = 1024
@@ -24,14 +27,14 @@ const (
 
 type service struct {
 	Container       string
-	ServiceURL      string
+	EndpointSuffix  string
 	ContainerClient azblob.ContainerClient
 }
 
 func newService(u *url.URL) (*service, error) {
 	s := service{}
 	if u.User != nil {
-		s.ServiceURL = u.Host
+		s.EndpointSuffix = u.Host
 		s.Container = u.User.Username()
 	} else {
 		s.Container = u.Host
@@ -43,18 +46,25 @@ func newService(u *url.URL) (*service, error) {
 
 	connStr := fmt.Sprintf(azureConnNameKey, accountName, accountKey)
 	if azureEndpoint != "" {
-		blobEndpointURL := strings.TrimRight(azureEndpoint, "/") + "/" + accountName
-		connStr = fmt.Sprintf(connStr+blobEndpoint, blobEndpointURL)
+		blobEndpointURL := fmt.Sprintf("%s/%s", strings.TrimRight(azureEndpoint, "/"), accountName)
+		endPointURL, err := url.Parse(azureEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		connStr = fmt.Sprintf(blobEndpointScheme+connStr+blobEndpoint, endPointURL.Scheme, blobEndpointURL)
 	}
 
-	if s.ServiceURL == "" {
-		s.ServiceURL = azureURL
-	}
-	if s.ServiceURL != azureURL {
-		connStr = connStr + fmt.Sprintf(blobEndpointSuffix, s.ServiceURL)
+	if s.EndpointSuffix != azureURL {
+		connStr = connStr + fmt.Sprintf(blobEndpointSuffix, s.EndpointSuffix)
 	}
 
-	serviceClient, err := azblob.NewServiceClientFromConnectionString(connStr, nil)
+	customCerts := getCustomCerts()
+	httpClient, err := http.GetClientWithCustomCerts(customCerts)
+	if err != nil {
+		return nil, err
+	}
+	opts := azblob.ClientOptions{Transporter: httpClient}
+	serviceClient, err := azblob.NewServiceClientFromConnectionString(connStr, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +73,16 @@ func newService(u *url.URL) (*service, error) {
 	return &s, nil
 }
 
-// listBlobs returns items that contains blobs or blob prefixes
+func getCustomCerts() []byte {
+	// Certificates in PEM format (base64)
+	certs := os.Getenv("AZBLOB_CERT")
+	if certs == "" {
+		return nil
+	}
+
+	return []byte(certs)
+}
+
 func (s *service) listBlobs(prefix, delimiter string) (*[]string, error) {
 	listOptions := &azblob.ContainerListBlobHierarchySegmentOptions{Prefix: &prefix}
 	pager := s.ContainerClient.ListBlobsHierarchy(delimiter, listOptions)

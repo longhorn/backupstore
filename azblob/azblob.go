@@ -18,6 +18,7 @@ var (
 	log = logrus.WithFields(logrus.Fields{"pkg": "azblob"})
 )
 
+// BackupStoreDriver defines the variables and method that backupstore will use.
 type BackupStoreDriver struct {
 	destURL string
 	path    string
@@ -25,6 +26,7 @@ type BackupStoreDriver struct {
 }
 
 const (
+	// KIND defines the kind of backupstore driver
 	KIND = "azblob"
 )
 
@@ -62,8 +64,8 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	}
 
 	b.destURL = KIND + "://" + b.service.Container
-	if b.service.Container != "" {
-		b.destURL += "@" + b.service.ServiceURL
+	if b.service.EndpointSuffix != "" {
+		b.destURL += "@" + b.service.EndpointSuffix
 	}
 	b.destURL += "/" + b.path
 
@@ -117,6 +119,7 @@ func (s *BackupStoreDriver) FileExists(filePath string) bool {
 	return s.FileSize(filePath) >= 0
 }
 
+// FileSize return content length of the filePath on the backup target
 func (s *BackupStoreDriver) FileSize(filePath string) int64 {
 	path := s.updatePath(filePath)
 	head, err := s.service.getBlobProperties(path)
