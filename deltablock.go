@@ -120,22 +120,26 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 		}
 	}()
 
-	bsDriver, err := GetBackupStoreDriver(destURL)
+	var bsDriver BackupStoreDriver
+	bsDriver, err = GetBackupStoreDriver(destURL)
 	if err != nil {
 		return "", false, err
 	}
 
-	lock, err := New(bsDriver, volume.Name, BACKUP_LOCK)
+	var lock *FileLock
+	lock, err = New(bsDriver, volume.Name, BACKUP_LOCK)
 	if err != nil {
 		return "", false, err
 	}
 
 	defer lock.Unlock()
-	if err := lock.Lock(); err != nil {
+	err = lock.Lock()
+	if err != nil {
 		return "", false, err
 	}
 
-	if err := addVolume(volume, bsDriver); err != nil {
+	err = addVolume(volume, bsDriver)
+	if err != nil {
 		return "", false, err
 	}
 
@@ -145,14 +149,16 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 		return "", false, err
 	}
 
-	if err := deltaOps.OpenSnapshot(snapshot.Name, volume.Name); err != nil {
+	err = deltaOps.OpenSnapshot(snapshot.Name, volume.Name)
+	if err != nil {
 		return "", false, err
 	}
 
 	backupRequest := &backupRequest{}
 	if volume.LastBackupName != "" {
 		lastBackupName := volume.LastBackupName
-		var backup, err = loadBackup(lastBackupName, volume.Name, bsDriver)
+		var backup *Backup
+		backup, err = loadBackup(lastBackupName, volume.Name, bsDriver)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				LogFieldReason:  LogReasonFallback,
@@ -191,7 +197,8 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 		LogFieldLastSnapshot: backupRequest.getLastSnapshotName(),
 	}).Debug("Generating snapshot changed blocks config")
 
-	delta, err := deltaOps.CompareSnapshot(snapshot.Name, backupRequest.getLastSnapshotName(), volume.Name)
+	var delta *Mappings
+	delta, err = deltaOps.CompareSnapshot(snapshot.Name, backupRequest.getLastSnapshotName(), volume.Name)
 	if err != nil {
 		deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
 		return "", backupRequest.isIncrementalBackup(), err
@@ -229,7 +236,8 @@ func CreateDeltaBlockBackup(config *DeltaBackupConfig) (string, bool, error) {
 	}
 
 	// keep lock alive for async go routine.
-	if err := lock.Lock(); err != nil {
+	err = lock.Lock()
+	if err != nil {
 		deltaOps.CloseSnapshot(snapshot.Name, volume.Name)
 		return "", backupRequest.isIncrementalBackup(), err
 	}
