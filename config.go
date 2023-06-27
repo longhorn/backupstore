@@ -51,16 +51,18 @@ func LoadConfigInBackupStore(driver BackupStoreDriver, filePath string, v interf
 		LogFieldObject:   LogObjectConfig,
 		LogFieldKind:     driver.Kind(),
 		LogFieldFilepath: filePath,
-	}).Debug()
+	}).Info("Loading config in backupstore")
+
 	if err := json.NewDecoder(rc).Decode(v); err != nil {
 		return err
 	}
+
 	log.WithFields(logrus.Fields{
 		LogFieldReason:   LogReasonComplete,
 		LogFieldObject:   LogObjectConfig,
 		LogFieldKind:     driver.Kind(),
 		LogFieldFilepath: filePath,
-	}).Debug()
+	}).Info("Loaded config in backupstore")
 	return nil
 }
 
@@ -74,16 +76,18 @@ func SaveConfigInBackupStore(driver BackupStoreDriver, filePath string, v interf
 		LogFieldObject:   LogObjectConfig,
 		LogFieldKind:     driver.Kind(),
 		LogFieldFilepath: filePath,
-	}).Debug()
+	}).Info("Saving config in backupstore")
+
 	if err := driver.Write(filePath, bytes.NewReader(j)); err != nil {
 		return err
 	}
+
 	log.WithFields(logrus.Fields{
 		LogFieldReason:   LogReasonComplete,
 		LogFieldObject:   LogObjectConfig,
 		LogFieldKind:     driver.Kind(),
 		LogFieldFilepath: filePath,
-	}).Debug()
+	}).Info("Saved config in backupstore")
 	return nil
 }
 
