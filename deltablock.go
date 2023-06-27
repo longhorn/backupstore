@@ -708,7 +708,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		LogFieldOrigVolume: srcVolumeName,
 		LogFieldVolumeDev:  volDevName,
 		LogEventBackupURL:  backupURL,
-	}).Debug()
+	}).Info("Restore delta block backup")
 
 	// keep lock alive for async go routine.
 	if err := lock.Lock(); err != nil {
