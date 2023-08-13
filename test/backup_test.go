@@ -17,6 +17,7 @@ import (
 
 	"github.com/longhorn/backupstore"
 	_ "github.com/longhorn/backupstore/nfs"
+	"github.com/longhorn/backupstore/types"
 	"github.com/longhorn/backupstore/util"
 )
 
@@ -115,9 +116,9 @@ func (r *RawFileVolume) HasSnapshot(id, volumeID string) bool {
 	return ok == nil
 }
 
-func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backupstore.Mappings, error) {
-	mappings := backupstore.Mappings{
-		Mappings:  []backupstore.Mapping{},
+func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*types.Mappings, error) {
+	mappings := types.Mappings{
+		Mappings:  []types.Mapping{},
 		BlockSize: backupstore.DEFAULT_BLOCK_SIZE,
 	}
 
@@ -139,7 +140,7 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 				return nil, err
 			}
 			if !reflect.DeepEqual(data, emptyData) {
-				mappings.Mappings = append(mappings.Mappings, backupstore.Mapping{
+				mappings.Mappings = append(mappings.Mappings, types.Mapping{
 					Offset: offset,
 					Size:   blockSize,
 				})
@@ -166,7 +167,7 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*backup
 			return nil, err
 		}
 		if !reflect.DeepEqual(data1, data2) {
-			mappings.Mappings = append(mappings.Mappings, backupstore.Mapping{
+			mappings.Mappings = append(mappings.Mappings, types.Mapping{
 				Offset: offset,
 				Size:   blockSize,
 			})
