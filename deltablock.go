@@ -717,6 +717,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 	go func() {
 		defer func() {
 			_ = deltaOps.CloseVolumeDev(volDev)
+			deltaOps.UpdateRestoreStatus(volDevName, PROGRESS_PERCENTAGE_BACKUP_TOTAL, err)
 			lock.Unlock()
 		}()
 
@@ -754,8 +755,6 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 			deltaOps.UpdateRestoreStatus(volDevName, progress.progress, err)
 			return
 		}
-
-		deltaOps.UpdateRestoreStatus(volDevName, PROGRESS_PERCENTAGE_BACKUP_TOTAL, nil)
 	}()
 
 	return nil
