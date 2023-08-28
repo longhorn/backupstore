@@ -19,6 +19,8 @@ import (
 	_ "github.com/longhorn/backupstore/nfs"
 	"github.com/longhorn/backupstore/types"
 	"github.com/longhorn/backupstore/util"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -62,6 +64,25 @@ type RawFileVolume struct {
 	BackupURL       string
 	RestoreProgress int
 	RestoreError    error
+}
+
+func (r *RawFileVolume) OpenVolumeDev(volDevName string) (*os.File, string, error) {
+	if _, err := os.Stat(volDevName); err == nil {
+		logrus.WithError(err).Warnf("File %s for the restore exists, will remove and re-create it", volDevName)
+		if err := os.RemoveAll(volDevName); err != nil {
+			return nil, "", errors.Wrapf(err, "failed to clean up the existing file %v before restore", volDevName)
+		}
+	}
+
+	fh, err := os.Create(volDevName)
+	return fh, volDevName, err
+}
+
+func (r *RawFileVolume) CloseVolumeDev(volDev *os.File) error {
+	if volDev == nil {
+		return nil
+	}
+	return volDev.Close()
 }
 
 func (r *RawFileVolume) UpdateBackupStatus(id, volumeID string, backupState string, backupProgress int, backupURL string, backupError string) error {
