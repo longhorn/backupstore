@@ -5,8 +5,9 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/longhorn/backupstore/util"
 	"github.com/pkg/errors"
+
+	"github.com/longhorn/backupstore/util"
 )
 
 type Volume struct {
