@@ -330,10 +330,11 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 
 		volume := RawFileVolume{
 			v: backupstore.Volume{
-				Name:              volumeNameInTest,
-				Size:              volumeSize,
-				CreatedTime:       util.Now(),
-				CompressionMethod: compressionMethod,
+				Name:               volumeNameInTest,
+				Size:               volumeSize,
+				CreatedTime:        util.Now(),
+				CompressionMethod:  compressionMethod,
+				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
 			},
 		}
 		// Each snapshot will be one more block different from before
@@ -457,10 +458,11 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 
 		volume := RawFileVolume{
 			v: backupstore.Volume{
-				Name:              volumeNameInTest,
-				Size:              volumeSize,
-				CompressionMethod: compressionMethod,
-				CreatedTime:       util.Now(),
+				Name:               volumeNameInTest,
+				Size:               volumeSize,
+				CompressionMethod:  compressionMethod,
+				CreatedTime:        util.Now(),
+				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
 			},
 		}
 

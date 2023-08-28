@@ -12,3 +12,10 @@ const (
 	PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT = 95
 	PROGRESS_PERCENTAGE_BACKUP_TOTAL    = 100
 )
+
+type BackendStoreDriver string
+
+const (
+	BackendStoreDriverV1 = BackendStoreDriver("v1")
+	BackendStoreDriverV2 = BackendStoreDriver("v2")
+)
