@@ -111,6 +111,8 @@ type DeltaRestoreOperations interface {
 	OpenVolumeDev(volDevName string) (*os.File, string, error)
 	CloseVolumeDev(volDev *os.File) error
 	UpdateRestoreStatus(snapshot string, restoreProgress int, err error)
+	Stop()
+	GetStopChan() chan struct{}
 }
 
 // CreateDeltaBlockBackup creates a delta block backup for the given volume and snapshot.
@@ -447,38 +449,6 @@ func getTotalBackupBlockCounts(delta *types.Mappings) (int64, error) {
 	return totalBlockCounts, nil
 }
 
-// mergeErrorChannels will merge all error channels into a single error out channel.
-// the error out channel will be closed once the ctx is done or all error channels are closed
-// if there is an error on one of the incoming channels the error will be relayed.
-func mergeErrorChannels(ctx context.Context, channels ...<-chan error) <-chan error {
-	var wg sync.WaitGroup
-	wg.Add(len(channels))
-
-	out := make(chan error, len(channels))
-	output := func(c <-chan error) {
-		defer wg.Done()
-		select {
-		case err, ok := <-c:
-			if ok {
-				out <- err
-			}
-			return
-		case <-ctx.Done():
-			return
-		}
-	}
-
-	for _, c := range channels {
-		go output(c)
-	}
-
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-	return out
-}
-
 func sortBackupBlocks(blocks []BlockMapping, volumeSize, blockSize int64) []BlockMapping {
 	sortedBlocks := make([]string, volumeSize/blockSize)
 	for _, block := range blocks {
@@ -717,9 +687,12 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		return err
 	}
 	go func() {
+		var err error
+		currentProgress := 0
+
 		defer func() {
 			_ = deltaOps.CloseVolumeDev(volDev)
-			deltaOps.UpdateRestoreStatus(volDevName, PROGRESS_PERCENTAGE_BACKUP_TOTAL, err)
+			deltaOps.UpdateRestoreStatus(volDevName, currentProgress, err)
 			lock.Unlock()
 		}()
 
@@ -734,8 +707,8 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		// We want to truncate regular files, but not device
 		if stat.Mode().IsRegular() {
 			log.Infof("Truncate %v to size %v", volDevName, vol.Size)
-			if err := volDev.Truncate(vol.Size); err != nil {
-				deltaOps.UpdateRestoreStatus(volDevName, progress.progress, err)
+			err = volDev.Truncate(vol.Size)
+			if err != nil {
 				return
 			}
 		}
@@ -753,10 +726,11 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 		mergedErrChan := mergeErrorChannels(ctx, errorChans...)
 		err = <-mergedErrChan
 		if err != nil {
+			currentProgress = progress.progress
 			logrus.WithError(err).Errorf("Failed to delta restore volume %v backup %v", srcVolumeName, backup.Name)
-			deltaOps.UpdateRestoreStatus(volDevName, progress.progress, err)
 			return
 		}
+		currentProgress = PROGRESS_PERCENTAGE_BACKUP_TOTAL
 	}()
 
 	return nil
@@ -1006,6 +980,7 @@ func restoreBlocks(ctx context.Context, bsDriver BackupStoreDriver, deltaOps Del
 	errChan := make(chan error, 1)
 
 	go func() {
+		var err error
 		defer close(errChan)
 
 		volDev, err := os.OpenFile(volDevPath, os.O_RDWR, 0666)
@@ -1013,19 +988,29 @@ func restoreBlocks(ctx context.Context, bsDriver BackupStoreDriver, deltaOps Del
 			errChan <- err
 			return
 		}
-		defer volDev.Close()
+		defer func() {
+			volDev.Close()
+			if err != nil {
+				errChan <- err
+			}
+		}()
 
 		for {
 			select {
 			case <-ctx.Done():
+				logrus.Infof("Closing goroutine for restoring blocks for volume %v", volumeName)
+				return
+			case <-deltaOps.GetStopChan():
+				logrus.Infof("Closing goroutine for restoring blocks for %v since received stop signal", volumeName)
+				err = fmt.Errorf("restoration is cancelled since received stop signal")
 				return
 			case block, open := <-in:
 				if !open {
 					return
 				}
 
-				if err := restoreBlock(bsDriver, deltaOps, volumeName, volDev, block, progress); err != nil {
-					errChan <- err
+				err = restoreBlock(bsDriver, deltaOps, volumeName, volDev, block, progress)
+				if err != nil {
 					return
 				}
 			}
@@ -1056,7 +1041,6 @@ func performIncrementalRestore(bsDriver BackupStoreDriver, config *DeltaRestoreC
 
 	mergedErrChan := mergeErrorChannels(ctx, errorChans...)
 	err = <-mergedErrChan
-
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to incrementally restore volume %v backup %v", srcVolumeName, backup.Name)
 	}
