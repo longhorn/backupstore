@@ -64,6 +64,8 @@ type RawFileVolume struct {
 	BackupURL       string
 	RestoreProgress int
 	RestoreError    error
+	stopOnce        sync.Once
+	stopChan        chan struct{}
 }
 
 func (r *RawFileVolume) OpenVolumeDev(volDevName string) (*os.File, string, error) {
@@ -130,6 +132,16 @@ func (r *RawFileVolume) ResetRestoreStatus() {
 	r.RestoreProgress = 0
 	r.RestoreError = nil
 	r.lock.Unlock()
+}
+
+func (r *RawFileVolume) Stop() {
+	r.stopOnce.Do(func() {
+		close(r.stopChan)
+	})
+}
+
+func (r *RawFileVolume) GetStopChan() chan struct{} {
+	return r.stopChan
 }
 
 func (r *RawFileVolume) HasSnapshot(id, volumeID string) bool {
@@ -336,6 +348,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 				CompressionMethod:  compressionMethod,
 				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
 			},
+			stopChan: make(chan struct{}),
 		}
 		// Each snapshot will be one more block different from before
 		for i := 0; i < snapshotCounts; i++ {
@@ -464,6 +477,7 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 				CreatedTime:        util.Now(),
 				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
 			},
+			stopChan: make(chan struct{}),
 		}
 
 		for i := 0; i < snapshotCounts; i++ {
