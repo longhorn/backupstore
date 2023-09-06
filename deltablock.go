@@ -373,7 +373,7 @@ func backupBlock(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 		return nil
 	}
 
-	log.Debugf("Creating new block file at %v", blkFile)
+	log.Tracef("Creating new block file at %v", blkFile)
 	newBlock = true
 	rs, err := util.CompressData(deltaBackup.CompressionMethod, block)
 	if err != nil {
@@ -393,7 +393,7 @@ func backupMapping(bsDriver BackupStoreDriver, config *DeltaBackupConfig,
 	blkCounts := mapping.Size / blockSize
 
 	for i := int64(0); i < blkCounts; i++ {
-		log.Debugf("Backup for %v: segment %+v, blocks %v/%v", snapshot.Name, mapping, i+1, blkCounts)
+		log.Tracef("Backup for %v: segment %+v, blocks %v/%v", snapshot.Name, mapping, i+1, blkCounts)
 		offset := mapping.Offset + i*blockSize
 		if err := deltaOps.ReadSnapshot(snapshot.Name, volume.Name, offset, block); err != nil {
 			logrus.WithError(err).Errorf("Failed to read volume %v snapshot %v block at offset %v size %v",
