@@ -27,9 +27,10 @@ var (
 )
 
 type BackupStoreDriver struct {
-	destURL    string
-	serverPath string
-	mountDir   string
+	destURL      string
+	serverPath   string
+	mountDir     string
+	mountOptions []string
 	*fsops.FileSystemOperator
 }
 
@@ -72,8 +73,20 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 	b.destURL = KIND + "://" + b.serverPath
 	b.mountDir = filepath.Join(util.MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
 
+	nfsOptions, exist := u.Query()["nfsOptions"]
+	if exist {
+		if len(nfsOptions) > 1 {
+			// Options in the form "nfsOptions=soft&nfsOptions=timeo=450&nfsOptions=retrans=3" are legal.
+			b.mountOptions = nfsOptions
+		} else {
+			// Options in the form "nfsOptions=soft,timeo=450,retrans=3" are more likely, but we must split them.
+			b.mountOptions = strings.Split(nfsOptions[0], ",")
+		}
+		log.Infof("NFS mountOptions:  %v", b.mountOptions)
+	}
+
 	if err := b.mount(); err != nil {
-		return nil, errors.Wrapf(err, "cannot mount nfs %v", b.serverPath)
+		return nil, errors.Wrapf(err, "cannot mount nfs %v, options %v", b.serverPath, b.mountOptions)
 	}
 	if _, err := b.List(""); err != nil {
 		return nil, fmt.Errorf("NFS path %v doesn't exist or is not a directory", b.serverPath)
@@ -97,27 +110,44 @@ func (b *BackupStoreDriver) mount() error {
 
 	retErr := errors.New("cannot mount using NFSv4")
 
-	for _, version := range MinorVersions {
-		log.Infof("Attempting mount for nfs path %v with nfsvers %v", b.serverPath, version)
-
-		mountOptions := []string{
-			fmt.Sprintf("nfsvers=%v", version),
-			"actimeo=1",
-			"soft",
-			"timeo=300",
-			"retry=2",
-		}
+	// If overridden, assume nfsvers is specified or defaulted, but don't try all minor versions.
+	if len(b.mountOptions) > 0 {
 		sensitiveMountOptions := []string{}
 
-		log.Infof("Mounting NFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, mountOptions)
+		log.Infof("Mounting NFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, b.mountOptions)
 
-		err := util.MountWithTimeout(mounter, b.serverPath, b.mountDir, "nfs4", mountOptions, sensitiveMountOptions,
+		err := util.MountWithTimeout(mounter, b.serverPath, b.mountDir, "nfs4", b.mountOptions, sensitiveMountOptions,
 			defaultMountInterval, defaultMountTimeout)
 		if err == nil {
 			return nil
 		}
 
-		retErr = errors.Wrapf(retErr, "vers=%s: %v", version, err.Error())
+		retErr = errors.Wrapf(retErr, "version defaulted: %v", err.Error())
+
+	} else {
+		// If we are picking the mount options, step down through v4 minor versions until one works.
+		for _, version := range MinorVersions {
+			log.Infof("Attempting mount for nfs path %v with nfsvers %v", b.serverPath, version)
+
+			b.mountOptions = []string{
+				fmt.Sprintf("nfsvers=%v", version),
+				"actimeo=1",
+				"soft",
+				"timeo=300",
+				"retry=2",
+			}
+			sensitiveMountOptions := []string{}
+
+			log.Infof("Mounting NFS share %v on mount point %v with options %+v", b.destURL, b.mountDir, b.mountOptions)
+
+			err := util.MountWithTimeout(mounter, b.serverPath, b.mountDir, "nfs4", b.mountOptions, sensitiveMountOptions,
+				defaultMountInterval, defaultMountTimeout)
+			if err == nil {
+				return nil
+			}
+
+			retErr = errors.Wrapf(retErr, "vers=%s: %v", version, err.Error())
+		}
 	}
 
 	return retErr
