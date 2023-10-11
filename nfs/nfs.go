@@ -82,7 +82,7 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 			// Options in the form "nfsOptions=soft,timeo=450,retrans=3" are more likely, but we must split them.
 			b.mountOptions = strings.Split(nfsOptions[0], ",")
 		}
-		log.Infof("NFS mountOptions:  %v", b.mountOptions)
+		log.Infof("Overriding NFS mountOptions:  %v", b.mountOptions)
 	}
 
 	if err := b.mount(); err != nil {
