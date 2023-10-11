@@ -14,24 +14,27 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 		destURL           string
 		expectDecodeError bool
 		expectBackupURL   string
+		expectDecodeURL   string
 	}{
 		{
 			volumeName:      "vol-1",
 			destURL:         "s3://backupstore@minio/",
 			expectBackupURL: "s3://backupstore@minio/?volume=vol-1",
+			expectDecodeURL: "s3://backupstore@minio/",
 		},
 		{
 			volumeName:      "vol-2",
 			backupName:      "backup-2",
 			destURL:         "s3://backupstore@minio/",
 			expectBackupURL: "s3://backupstore@minio/?backup=backup-2&volume=vol-2",
+			expectDecodeURL: "s3://backupstore@minio/",
 		},
 		{
 			// Test invalid volume name
 			volumeName:        "-3-vol",
 			destURL:           "s3://backupstore@minio/",
-			expectDecodeError: true,
 			expectBackupURL:   "s3://backupstore@minio/?volume=-3-vol",
+			expectDecodeError: true,
 		},
 		{
 			// Test invalid backup name
@@ -40,6 +43,22 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 			destURL:           "s3://backupstore@minio/",
 			expectBackupURL:   "s3://backupstore@minio/?backup=-4-backup&volume=vol-4",
 			expectDecodeError: true,
+		},
+		{
+			// Test NFS target with no mount options.
+			volumeName:      "vol-5",
+			backupName:      "backup-5",
+			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-5&volume=vol-5",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+		},
+		{
+			// Test NFS target with mount options (dropped by DecodeBackupURL.)
+			volumeName:      "vol-6",
+			backupName:      "backup-6",
+			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft,timeo=150,retrans=3",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-6&volume=vol-6",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
 		},
 	}
 
@@ -57,7 +76,7 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 				assert.Nil(err)
 				assert.Equal(backupName, tc.backupName)
 				assert.Equal(volumeName, tc.volumeName)
-				assert.Equal(destURL, tc.destURL)
+				assert.Equal(destURL, tc.expectDecodeURL)
 			}
 		})
 	}
