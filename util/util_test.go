@@ -3,6 +3,7 @@ package util
 import (
 	"io"
 	"math/rand"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -134,4 +135,62 @@ func (s *TestSuite) TestValidateName(c *C) {
 	c.Assert(ValidateName("123/456.a"), Equals, false)
 	c.Assert(ValidateName("a.\t"), Equals, false)
 	c.Assert(ValidateName("ubuntu14.04_v1 "), Equals, false)
+}
+
+func (s *TestSuite) TestSplitMountOptions(c *C) {
+	testCases := []struct {
+		destURL          string
+		expectParseError bool
+		expectOptions    []string
+	}{
+		{
+			// Test NFS target with no mount options.
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+			expectOptions: []string{},
+		},
+		{
+			// Test NFS target with empty Query tag.
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?",
+			expectOptions: []string{},
+		},
+		{
+			// Test NFS target with mount options as comma-separate string in single query tag.
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft,timeo=150,retrans=3",
+			expectOptions: []string{"soft", "timeo=150", "retrans=3"},
+		},
+		{
+			// Test NFS target with mount options as multiple query tags
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft&nfsOptions=timeo=150&nfsOptions=retrans=3",
+			expectOptions: []string{"soft", "timeo=150", "retrans=3"},
+		},
+		{
+			// Test NFS target with mount options and other tags
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft,timeo=150,retrans=3&otherTag=mumble",
+			expectOptions: []string{"soft", "timeo=150", "retrans=3"},
+		},
+		{
+			// Test NFS target with empty mount options.
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=",
+			expectOptions: []string{""},
+		},
+		{
+			// Test invalid target URL.  Second "?" is treated as literal data.
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=mumble?foo=bar",
+			expectOptions: []string{"mumble?foo=bar"},
+		},
+	}
+
+	for _, tc := range testCases {
+		u, err := url.Parse(tc.destURL)
+		if tc.expectParseError {
+			c.Assert(err, NotNil)
+		} else {
+			c.Assert(err, IsNil)
+			nfsOptions, exist := u.Query()["nfsOptions"]
+			if exist {
+				options := SplitMountOptions(nfsOptions)
+				c.Assert(options, DeepEquals, tc.expectOptions)
+			}
+		}
+	}
 }

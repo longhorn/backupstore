@@ -18,7 +18,8 @@ import (
 )
 
 var (
-	log           = logrus.WithFields(logrus.Fields{"pkg": "nfs"})
+	log = logrus.WithFields(logrus.Fields{"pkg": "nfs"})
+
 	MinorVersions = []string{"4.2", "4.1", "4.0"}
 
 	// Ref: https://github.com/longhorn/backupstore/pull/91
@@ -75,21 +76,16 @@ func initFunc(destURL string) (backupstore.BackupStoreDriver, error) {
 
 	nfsOptions, exist := u.Query()["nfsOptions"]
 	if exist {
-		if len(nfsOptions) > 1 {
-			// Options in the form "nfsOptions=soft&nfsOptions=timeo=450&nfsOptions=retrans=3" are legal.
-			b.mountOptions = nfsOptions
-		} else {
-			// Options in the form "nfsOptions=soft,timeo=450,retrans=3" are more likely, but we must split them.
-			b.mountOptions = strings.Split(nfsOptions[0], ",")
-		}
+		b.mountOptions = util.SplitMountOptions(nfsOptions)
 		log.Infof("Overriding NFS mountOptions:  %v", b.mountOptions)
 	}
 
 	if err := b.mount(); err != nil {
 		return nil, errors.Wrapf(err, "cannot mount nfs %v, options %v", b.serverPath, b.mountOptions)
 	}
+
 	if _, err := b.List(""); err != nil {
-		return nil, fmt.Errorf("NFS path %v doesn't exist or is not a directory", b.serverPath)
+		return nil, errors.Wrapf(err, "NFS path %v doesn't exist or is not a directory", b.serverPath)
 	}
 
 	log.Infof("Loaded driver for %v", b.destURL)
@@ -110,7 +106,7 @@ func (b *BackupStoreDriver) mount() error {
 
 	retErr := errors.New("cannot mount using NFSv4")
 
-	// If overridden, assume nfsvers is specified or defaulted, but don't try all minor versions.
+	// If overridden, assume minor version is specified or defaulted.
 	if len(b.mountOptions) > 0 {
 		sensitiveMountOptions := []string{}
 
@@ -122,7 +118,7 @@ func (b *BackupStoreDriver) mount() error {
 			return nil
 		}
 
-		retErr = errors.Wrapf(retErr, "version defaulted: %v", err.Error())
+		retErr = errors.Wrapf(retErr, "nfsOptions=%v : %v", b.mountOptions, err.Error())
 
 	} else {
 		// If we are picking the mount options, step down through v4 minor versions until one works.

@@ -60,6 +60,22 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-6&volume=vol-6",
 			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
 		},
+		{
+			// Test NFS target with empty Query tag.
+			volumeName:      "vol-7",
+			backupName:      "backup-7",
+			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-7&volume=vol-7",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+		},
+		{
+			// Test NFS target with empty mount options.
+			volumeName:      "vol-8",
+			backupName:      "backup-8",
+			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-8&volume=vol-8",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+		},
 	}
 
 	for _, tc := range testCases {
