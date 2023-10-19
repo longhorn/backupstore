@@ -53,12 +53,20 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
 		},
 		{
-			// Test NFS target with mount options (dropped by DecodeBackupURL.)
+			// Test NFS target with mount options (simple form).  Query tags are sorted, "=" and "," are escaped.
 			volumeName:      "vol-6",
 			backupName:      "backup-6",
 			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft,timeo=150,retrans=3",
-			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-6&volume=vol-6",
-			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-6&nfsOptions=soft%2Ctimeo%3D150%2Cretrans%3D3&volume=vol-6",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft%2Ctimeo%3D150%2Cretrans%3D3",
+		},
+		{
+			// Test NFS target with mount options (other form).
+			volumeName:      "vol-6",
+			backupName:      "backup-6",
+			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft&nfsOptions=timeo=150&nfsOptions=retrans=3",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-6&nfsOptions=soft&nfsOptions=timeo%3D150&nfsOptions=retrans%3D3&volume=vol-6",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft&nfsOptions=timeo%3D150&nfsOptions=retrans%3D3",
 		},
 		{
 			// Test NFS target with empty Query tag.
@@ -73,8 +81,8 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 			volumeName:      "vol-8",
 			backupName:      "backup-8",
 			destURL:         "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=",
-			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-8&volume=vol-8",
-			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore",
+			expectBackupURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?backup=backup-8&nfsOptions=&volume=vol-8",
+			expectDecodeURL: "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=",
 		},
 	}
 
@@ -83,16 +91,16 @@ func TestEncodeAndDecodeBackupURL(t *testing.T) {
 			assert := assert.New(t)
 
 			gotBackupURL := EncodeBackupURL(tc.backupName, tc.volumeName, tc.destURL)
-			assert.Equal(gotBackupURL, tc.expectBackupURL)
+			assert.Equal(tc.expectBackupURL, gotBackupURL)
 
 			backupName, volumeName, destURL, err := DecodeBackupURL(gotBackupURL)
 			if tc.expectDecodeError {
 				assert.NotNil(err)
 			} else {
 				assert.Nil(err)
-				assert.Equal(backupName, tc.backupName)
-				assert.Equal(volumeName, tc.volumeName)
-				assert.Equal(destURL, tc.expectDecodeURL)
+				assert.Equal(tc.backupName, backupName)
+				assert.Equal(tc.volumeName, volumeName)
+				assert.Equal(tc.expectDecodeURL, destURL)
 			}
 		})
 	}
