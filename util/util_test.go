@@ -159,6 +159,11 @@ func (s *TestSuite) TestSplitMountOptions(c *C) {
 			expectOptions: []string{"soft", "timeo=150", "retrans=3"},
 		},
 		{
+			// Test NFS target with mount options as escaped, comma-separate string in single query tag.
+			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft%2Ctimeo%3D150%2Cretrans%3D3",
+			expectOptions: []string{"soft", "timeo=150", "retrans=3"},
+		},
+		{
 			// Test NFS target with mount options as multiple query tags
 			destURL:       "nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft&nfsOptions=timeo=150&nfsOptions=retrans=3",
 			expectOptions: []string{"soft", "timeo=150", "retrans=3"},
