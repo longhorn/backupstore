@@ -1,6 +1,6 @@
 module github.com/longhorn/backupstore
 
-go 1.17
+go 1.21
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1
