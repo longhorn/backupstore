@@ -5,10 +5,12 @@ import (
 	"net/url"
 	"path/filepath"
 
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/longhorn/backupstore"
 	"github.com/longhorn/backupstore/common"
 	"github.com/longhorn/backupstore/util"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -22,31 +24,33 @@ const (
 	BlkSuffix       = ".blk"
 )
 
-func addBackingImage(driver backupstore.BackupStoreDriver, backupBackingImage *BackupBackingImage) error {
-	log := backupstore.GetLog()
+func addBackingImageConfigInBackupStore(driver backupstore.BackupStoreDriver, backupBackingImage *BackupBackingImage) (bool, error) {
+	log := backupstore.GetLog().WithFields(logrus.Fields{"type": BackingImageLogType, "name": backupBackingImage.Name})
+
 	if backingImageExists(driver, backupBackingImage.Name) {
-		return nil
+		return true, nil
 	}
 
 	if !util.ValidateName(backupBackingImage.Name) {
-		return fmt.Errorf("invalid backing image name %v", backupBackingImage.Name)
+		return false, fmt.Errorf("invalid backing image name %v", backupBackingImage.Name)
 	}
 
-	if err := saveBackingImage(driver, backupBackingImage); err != nil {
-		return errors.Wrapf(err, "failed to add backing image %v", backupBackingImage.Name)
+	if err := saveBackingImageConfig(driver, backupBackingImage); err != nil {
+		return false, errors.Wrap(err, "failed to add backing image config to backupstore")
 	}
 
-	log.Infof("Added backupstore backing image %v", backupBackingImage.Name)
-	return nil
+	log.Info("Added backing image config to backupstore")
+	return false, nil
 }
 
 func removeBackupBackingImage(backupBackingImage *BackupBackingImage, driver backupstore.BackupStoreDriver) error {
-	log := backupstore.GetLog()
+	log := backupstore.GetLog().WithFields(logrus.Fields{"type": BackingImageLogType, "name": backupBackingImage.Name})
+
 	filePath := getBackingImageFilePath(backupBackingImage.Name)
 	if err := driver.Remove(filePath); err != nil {
 		return err
 	}
-	log.Infof("Removed %v on backupstore", filePath)
+	log.Infof("Removed backing image on backupstore with filePath: %v", filePath)
 	return nil
 }
 
@@ -64,11 +68,11 @@ func getBackingImagePath(backingImageName string) string {
 	return filepath.Join(backupstore.GetBackupstoreBase(), BackingImageDirectory, BackingImageDirectory, backingImageName) + "/"
 }
 
-func saveBackingImage(driver backupstore.BackupStoreDriver, backupBackingImage *BackupBackingImage) error {
+func saveBackingImageConfig(driver backupstore.BackupStoreDriver, backupBackingImage *BackupBackingImage) error {
 	return backupstore.SaveConfigInBackupStore(driver, getBackingImageFilePath(backupBackingImage.Name), backupBackingImage)
 }
 
-func loadBackingImage(driver backupstore.BackupStoreDriver, backingImageName string) (*BackupBackingImage, error) {
+func loadBackingImageConfigInBackupStore(driver backupstore.BackupStoreDriver, backingImageName string) (*BackupBackingImage, error) {
 	log := backupstore.GetLog()
 	backupBackingImage := &BackupBackingImage{}
 	path := getBackingImageFilePath(backingImageName)
@@ -76,9 +80,19 @@ func loadBackingImage(driver backupstore.BackupStoreDriver, backingImageName str
 		return nil, err
 	}
 	if backupBackingImage.CompressionMethod == "" {
-		log.Infof("Fall back compression method to %v for volume %v", backupstore.LEGACY_COMPRESSION_METHOD, backupBackingImage.Name)
+		log.Infof("Fall back compression method to %v for backing image %v", backupstore.LEGACY_COMPRESSION_METHOD, backupBackingImage.Name)
 		backupBackingImage.CompressionMethod = backupstore.LEGACY_COMPRESSION_METHOD
 	}
+
+	if backupBackingImage.Blocks == nil {
+		backupBackingImage.Blocks = []common.BlockMapping{}
+	}
+	if backupBackingImage.ProcessingBlocks == nil {
+		backupBackingImage.ProcessingBlocks = &common.ProcessingBlocks{
+			Blocks: map[string][]*common.BlockMapping{},
+		}
+	}
+
 	return backupBackingImage, nil
 }
 
@@ -183,7 +197,7 @@ func InspectBackupBackingImage(backupURL string) (*BackupInfo, error) {
 		return nil, err
 	}
 
-	backupBackingImage, err := loadBackingImage(bsDriver, backupBackingImageName)
+	backupBackingImage, err := loadBackingImageConfigInBackupStore(bsDriver, backupBackingImageName)
 	if err != nil {
 		return nil, err
 	} else if isBackupInProgress(backupBackingImage) {

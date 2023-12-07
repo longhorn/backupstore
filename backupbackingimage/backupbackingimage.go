@@ -7,11 +7,17 @@ import (
 	"os"
 	"sync"
 
-	"github.com/longhorn/backupstore"
-	"github.com/longhorn/backupstore/common"
-	"github.com/longhorn/backupstore/util"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/longhorn/backupstore"
+	"github.com/longhorn/backupstore/common"
+	"github.com/longhorn/backupstore/types"
+	"github.com/longhorn/backupstore/util"
+)
+
+const (
+	BackingImageLogType = "BackingImage"
 )
 
 type BackupBackingImage struct {
@@ -43,25 +49,39 @@ type RestoreConfig struct {
 	ConcurrentLimit int32
 }
 
-type BackupStatus interface {
+type BackupOperation interface {
 	ReadFile(start int64, data []byte) error
-	CloseFile() error
-	Update(state string, progress int, backupURL string, err string) error
+	CloseFile()
+	UpdateBackupProgress(state string, progress int, backupURL string, err string)
 }
 
-type RestoreStatus interface {
+type RestoreOperation interface {
 	UpdateRestoreProgress(progress int, err error)
 }
 
-func CreateBackingImageBackup(config *BackupConfig, backupBackingImage *BackupBackingImage, backupStatus BackupStatus, mappings *common.Mappings) (err error) {
-	log := backupstore.GetLog()
-	if config == nil || backupStatus == nil {
-		return fmt.Errorf("invalid empty config or backupStatus for backup")
+func getLoggerForBackupBackingImage(config *BackupConfig) *logrus.Entry {
+	log := logrus.WithFields(
+		logrus.Fields{
+			"pkg":       "backupstore",
+			"type":      BackingImageLogType,
+			"name":      config.Name,
+			"backupURL": config.DestURL,
+		},
+	)
+
+	return log
+}
+
+func CreateBackingImageBackup(config *BackupConfig, backupBackingImage *BackupBackingImage, backupOperation BackupOperation, mappings *common.Mappings) (err error) {
+	log := getLoggerForBackupBackingImage(config)
+	if config == nil || backupBackingImage == nil || backupOperation == nil || mappings == nil {
+		return fmt.Errorf("invalid parameters: config, backupOperation, backupBackingImage or mappings for backup")
 	}
 
 	defer func() {
 		if err != nil {
-			backupStatus.Update(string(common.ProgressStateError), 0, "", err.Error())
+			log.WithError(err).Warn("Failed to create backup backing image")
+			backupOperation.UpdateBackupProgress(string(common.ProgressStateError), 0, "", err.Error())
 		}
 	}()
 
@@ -70,7 +90,7 @@ func CreateBackingImageBackup(config *BackupConfig, backupBackingImage *BackupBa
 		return err
 	}
 
-	lock, err := backupstore.New(bsDriver, config.Name, backupstore.BACKUP_LOCK)
+	lock, err := backupstore.New(bsDriver, types.BackupBackingImageLockName, backupstore.BACKUP_LOCK)
 	if err != nil {
 		return err
 	}
@@ -80,37 +100,38 @@ func CreateBackingImageBackup(config *BackupConfig, backupBackingImage *BackupBa
 		return err
 	}
 
-	if err := addBackingImage(bsDriver, backupBackingImage); err != nil {
+	exists, err := addBackingImageConfigInBackupStore(bsDriver, backupBackingImage)
+	if err != nil {
 		return err
 	}
 
-	backupBackingImage, err = loadBackingImage(bsDriver, backupBackingImage.Name)
+	if exists {
+		log.Info("Backup BackingImage already exists, no need to perform backup")
+		return nil
+	}
+
+	backupBackingImage, err = loadBackingImageConfigInBackupStore(bsDriver, backupBackingImage.Name)
 	if err != nil {
 		return err
 	}
 
 	log.Info("Creating backup backing image")
 
-	backupBackingImage.Blocks = []common.BlockMapping{}
-	backupBackingImage.ProcessingBlocks = &common.ProcessingBlocks{
-		Blocks: map[string][]*common.BlockMapping{},
-	}
-
 	if err := lock.Lock(); err != nil {
 		return err
 	}
 
 	go func() {
-		defer backupStatus.CloseFile()
+		defer backupOperation.CloseFile()
 		defer lock.Unlock()
 
-		backupStatus.Update(string(common.ProgressStateInProgress), 0, "", "")
+		backupOperation.UpdateBackupProgress(string(common.ProgressStateInProgress), 0, "", "")
 
-		if progress, backupURL, err := performBackup(bsDriver, config, backupBackingImage, backupStatus, mappings); err != nil {
+		if progress, backupURL, err := performBackup(bsDriver, config, backupBackingImage, backupOperation, mappings); err != nil {
 			log.WithError(err).Errorf("Failed to perform backup for backing image %v", backupBackingImage.Name)
-			backupStatus.Update(string(common.ProgressStateInProgress), progress, "", err.Error())
+			backupOperation.UpdateBackupProgress(string(common.ProgressStateInProgress), progress, "", err.Error())
 		} else {
-			backupStatus.Update(string(common.ProgressStateInProgress), progress, backupURL, "")
+			backupOperation.UpdateBackupProgress(string(common.ProgressStateInProgress), progress, backupURL, "")
 		}
 	}()
 
@@ -118,8 +139,8 @@ func CreateBackingImageBackup(config *BackupConfig, backupBackingImage *BackupBa
 }
 
 func performBackup(bsDriver backupstore.BackupStoreDriver, config *BackupConfig,
-	backupBackingImage *BackupBackingImage, backupStatus BackupStatus, mappings *common.Mappings) (int, string, error) {
-	log := backupstore.GetLog()
+	backupBackingImage *BackupBackingImage, backupOperation BackupOperation, mappings *common.Mappings) (int, string, error) {
+	log := getLoggerForBackupBackingImage(config)
 	destURL := config.DestURL
 	concurrentLimit := config.ConcurrentLimit
 
@@ -140,7 +161,7 @@ func performBackup(bsDriver backupstore.BackupStoreDriver, config *BackupConfig,
 
 	errorChans := []<-chan error{errChan}
 	for i := 0; i < int(concurrentLimit); i++ {
-		errorChans = append(errorChans, backupMappings(ctx, bsDriver, config, backupBackingImage, backupStatus, mappings.BlockSize, progress, mappingChan))
+		errorChans = append(errorChans, backupMappings(ctx, bsDriver, config, backupBackingImage, backupOperation, progress, mappingChan))
 	}
 	mergedErrChan := common.MergeErrorChannels(ctx, errorChans...)
 	err = <-mergedErrChan
@@ -151,7 +172,7 @@ func performBackup(bsDriver backupstore.BackupStoreDriver, config *BackupConfig,
 	backupBackingImage.Blocks = common.SortBackupBlocks(backupBackingImage.Blocks, backupBackingImage.Size, mappings.BlockSize)
 	backupBackingImage.CompleteTime = util.Now()
 	backupBackingImage.BlockCount = totalBlockCounts
-	if err := saveBackingImage(bsDriver, backupBackingImage); err != nil {
+	if err := saveBackingImageConfig(bsDriver, backupBackingImage); err != nil {
 		return progress.Progress, "", err
 	}
 
@@ -159,8 +180,8 @@ func performBackup(bsDriver backupstore.BackupStoreDriver, config *BackupConfig,
 }
 
 func backupMappings(ctx context.Context, bsDriver backupstore.BackupStoreDriver,
-	config *BackupConfig, backupBackingImage *BackupBackingImage, backupStatus BackupStatus,
-	blockSize int64, progress *common.Progress, in <-chan common.Mapping) <-chan error {
+	config *BackupConfig, backupBackingImage *BackupBackingImage, backupOperation BackupOperation,
+	progress *common.Progress, in <-chan common.Mapping) <-chan error {
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -174,7 +195,7 @@ func backupMappings(ctx context.Context, bsDriver backupstore.BackupStoreDriver,
 					return
 				}
 
-				if err := backupMapping(bsDriver, config, backupBackingImage, backupStatus, blockSize, mapping, progress); err != nil {
+				if err := backupMapping(bsDriver, config, backupBackingImage, backupOperation, mapping, progress); err != nil {
 					errChan <- err
 					return
 				}
@@ -186,46 +207,34 @@ func backupMappings(ctx context.Context, bsDriver backupstore.BackupStoreDriver,
 }
 
 func backupMapping(bsDriver backupstore.BackupStoreDriver,
-	config *BackupConfig, backupBackingImage *BackupBackingImage, backupStatus BackupStatus,
-	blockSize int64, mapping common.Mapping, progress *common.Progress) error {
+	config *BackupConfig, backupBackingImage *BackupBackingImage, backupOperation BackupOperation,
+	mapping common.Mapping, progress *common.Progress) error {
 
-	log := backupstore.GetLog()
+	log := getLoggerForBackupBackingImage(config)
 	block := make([]byte, mapping.Size)
 
-	if err := backupStatus.ReadFile(mapping.Offset, block); err != nil {
+	if err := backupOperation.ReadFile(mapping.Offset, block); err != nil {
 		log.WithError(err).Errorf("Failed to read backing image %v block at offset %v size %v", backupBackingImage.Name, mapping.Offset, len(block))
 		return err
 	}
-
-	if err := backupBlock(bsDriver, config, backupBackingImage, backupStatus, mapping.Offset, block, progress); err != nil {
-		logrus.WithError(err).Errorf("Failed to back up backing image %v block at offset %v size %v", backupBackingImage.Name, mapping.Offset, len(block))
-		return err
-	}
-
-	return nil
-}
-
-func backupBlock(bsDriver backupstore.BackupStoreDriver,
-	config *BackupConfig, backupBackingImage *BackupBackingImage, backupStatus BackupStatus,
-	offset int64, block []byte, progress *common.Progress) error {
 
 	var err error
 	newBlock := false
 
 	checksum := util.GetChecksum(block)
-
-	if isBlockBeingProcessed(backupBackingImage, offset, checksum) {
+	if isBlockBeingProcessed(backupBackingImage, mapping.Offset, checksum) {
 		return nil
 	}
 
 	defer func() {
 		if err != nil {
+			logrus.WithError(err).Errorf("Failed to back up backing image %v block at offset %v size %v", backupBackingImage.Name, mapping.Offset, len(block))
 			return
 		}
 		backupBackingImage.Lock()
 		defer backupBackingImage.Unlock()
 		updateBlocksAndProgress(backupBackingImage, progress, checksum, newBlock)
-		backupStatus.Update(string(common.ProgressStateInProgress), progress.Progress, "", "")
+		backupOperation.UpdateBackupProgress(string(common.ProgressStateInProgress), progress.Progress, "", "")
 	}()
 
 	// skip if block already exists
@@ -243,6 +252,7 @@ func backupBlock(bsDriver backupstore.BackupStoreDriver,
 	return bsDriver.Write(blkFile, rs)
 }
 
+// isBlockBeingProcessed check if the block is being processed by other goroutine and prevent redundant work
 func isBlockBeingProcessed(backupBackingImage *BackupBackingImage, offset int64, checksum string) bool {
 	processingBlocks := backupBackingImage.ProcessingBlocks
 
@@ -288,9 +298,9 @@ func updateBlocksAndProgress(backupBackingImage *BackupBackingImage, progress *c
 	delete(processingBlocks.Blocks, checksum)
 }
 
-func RestoreBackingImageBackup(config *RestoreConfig, restoreStatus RestoreStatus) error {
-	if config == nil || restoreStatus == nil {
-		return fmt.Errorf("invalid empty config or restoreStatus for restore")
+func RestoreBackingImageBackup(config *RestoreConfig, restoreOperation RestoreOperation) error {
+	if config == nil || restoreOperation == nil {
+		return fmt.Errorf("invalid empty config or restoreOperation for restore")
 	}
 
 	backingImageFilePath := config.Filename
@@ -307,7 +317,7 @@ func RestoreBackingImageBackup(config *RestoreConfig, restoreStatus RestoreStatu
 		return err
 	}
 
-	lock, err := backupstore.New(bsDriver, backingImageName, backupstore.RESTORE_LOCK)
+	lock, err := backupstore.New(bsDriver, types.BackupBackingImageLockName, backupstore.RESTORE_LOCK)
 	if err != nil {
 		return err
 	}
@@ -317,13 +327,17 @@ func RestoreBackingImageBackup(config *RestoreConfig, restoreStatus RestoreStatu
 		return err
 	}
 
-	backupBackingImage, err := loadBackingImage(bsDriver, backingImageName)
+	backupBackingImage, err := loadBackingImageConfigInBackupStore(bsDriver, backingImageName)
 	if err != nil {
 		return errors.Wrapf(err, "backing image %v doesn't exist in backup store", backingImageName)
 	}
 
 	if backupBackingImage.Size == 0 {
 		return fmt.Errorf("read invalid backing image size %v", backupBackingImage.Size)
+	}
+
+	if backupBackingImage.CompleteTime == "" {
+		return fmt.Errorf("BackupBackingImage %v is not completed, please check its status", backupBackingImage.Name)
 	}
 
 	backingImageFile, err := checkBackingImageFile(backingImageFilePath, backupBackingImage)
@@ -355,17 +369,17 @@ func RestoreBackingImageBackup(config *RestoreConfig, restoreStatus RestoreStatu
 		blockChan, errChan := common.PopulateBlocksForFullRestore(backupBackingImage.Blocks, backupBackingImage.CompressionMethod)
 		errorChans := []<-chan error{errChan}
 		for i := 0; i < int(concurrentLimit); i++ {
-			errorChans = append(errorChans, restoreBlocks(ctx, bsDriver, backingImageFilePath, blockChan, progress, restoreStatus))
+			errorChans = append(errorChans, restoreBlocks(ctx, bsDriver, backingImageFilePath, blockChan, progress, restoreOperation))
 		}
 
 		mergedErrChan := common.MergeErrorChannels(ctx, errorChans...)
 		err = <-mergedErrChan
 		if err != nil {
-			restoreStatus.UpdateRestoreProgress(int(progress.ProcessedBlockCounts)*backupstore.DEFAULT_BLOCK_SIZE, err)
+			restoreOperation.UpdateRestoreProgress(int(progress.ProcessedBlockCounts)*backupstore.DEFAULT_BLOCK_SIZE, err)
 			return
 		}
 
-		restoreStatus.UpdateRestoreProgress(int(backupBackingImage.Size), nil)
+		restoreOperation.UpdateRestoreProgress(int(backupBackingImage.Size), nil)
 	}()
 
 	return nil
@@ -410,7 +424,7 @@ func checkBackingImageFile(backingImageFilePath string, backupBackingImage *Back
 	return backingImageFile, nil
 }
 
-func restoreBlocks(ctx context.Context, bsDriver backupstore.BackupStoreDriver, backingImageFilePath string, in <-chan *common.Block, progress *common.Progress, restoreStatus RestoreStatus) <-chan error {
+func restoreBlocks(ctx context.Context, bsDriver backupstore.BackupStoreDriver, backingImageFilePath string, in <-chan *common.Block, progress *common.Progress, restoreOperation RestoreOperation) <-chan error {
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -432,7 +446,7 @@ func restoreBlocks(ctx context.Context, bsDriver backupstore.BackupStoreDriver, 
 					return
 				}
 
-				if err := restoreBlock(bsDriver, backingImageFile, block, progress, restoreStatus); err != nil {
+				if err := restoreBlock(bsDriver, backingImageFile, block, progress, restoreOperation); err != nil {
 					errChan <- err
 					return
 				}
@@ -443,7 +457,7 @@ func restoreBlocks(ctx context.Context, bsDriver backupstore.BackupStoreDriver, 
 	return errChan
 }
 
-func restoreBlock(bsDriver backupstore.BackupStoreDriver, backingImageFile *os.File, block *common.Block, progress *common.Progress, restoreStatus RestoreStatus) error {
+func restoreBlock(bsDriver backupstore.BackupStoreDriver, backingImageFile *os.File, block *common.Block, progress *common.Progress, restoreOperation RestoreOperation) error {
 
 	defer func() {
 		progress.Lock()
@@ -451,7 +465,7 @@ func restoreBlock(bsDriver backupstore.BackupStoreDriver, backingImageFile *os.F
 
 		progress.ProcessedBlockCounts++
 		progress.Progress = common.GetProgress(progress.TotalBlockCounts, progress.ProcessedBlockCounts)
-		restoreStatus.UpdateRestoreProgress(int(progress.ProcessedBlockCounts)*backupstore.DEFAULT_BLOCK_SIZE, nil)
+		restoreOperation.UpdateRestoreProgress(int(progress.ProcessedBlockCounts)*backupstore.DEFAULT_BLOCK_SIZE, nil)
 	}()
 
 	return restoreBlockToFile(bsDriver, backingImageFile, block.CompressionMethod,
@@ -489,10 +503,14 @@ func RemoveBackingImageBackup(backupURL string) (err error) {
 	if err != nil {
 		return err
 	}
-	log := backupstore.GetLog()
-	log = log.WithFields(logrus.Fields{"BackingImage": backingImageName})
 
-	lock, err := backupstore.New(bsDriver, backingImageName, backupstore.DELETION_LOCK)
+	config := &BackupConfig{
+		Name:    backingImageName,
+		DestURL: backupURL,
+	}
+	log := getLoggerForBackupBackingImage(config)
+
+	lock, err := backupstore.New(bsDriver, types.BackupBackingImageLockName, backupstore.DELETION_LOCK)
 	if err != nil {
 		return err
 	}
@@ -502,9 +520,9 @@ func RemoveBackingImageBackup(backupURL string) (err error) {
 	defer lock.Unlock()
 
 	// If we fail to load the backup we still want to proceed with the deletion of the backup file
-	backupBackingImage, err := loadBackingImage(bsDriver, backingImageName)
+	backupBackingImage, err := loadBackingImageConfigInBackupStore(bsDriver, backingImageName)
 	if err != nil {
-		log.WithError(err).Warn("Failed to load to be deleted backup backing image")
+		log.WithError(err).Warn("Failed to load the backup backing image config, will continue the deletion")
 		backupBackingImage = &BackupBackingImage{
 			Name: backingImageName,
 		}
@@ -521,38 +539,36 @@ func RemoveBackingImageBackup(backupURL string) (err error) {
 		return err
 	}
 
-	backupbackingImageNames, err := GetAllBackupBackingImageNames(bsDriver)
+	backupBackingImageNames, err := GetAllBackupBackingImageNames(bsDriver)
 	if err != nil {
 		log.WithError(err).Warn("Failed to load backup backing image names, skip block deletion")
 		return nil
 	}
 
-	canDeleteBlocks := checkAndUpdateBlockInfos(bsDriver, blockInfos, backupbackingImageNames)
+	canDeleteBlocks := checkAndUpdateBlockInfos(log, bsDriver, blockInfos, backupBackingImageNames)
 	if !canDeleteBlocks {
 		return nil
 	}
 
 	// check if there have been new backups created while we where processing
-	prevBackupBackingImageNames := backupbackingImageNames
-	backupBackingImageNames, err := GetAllBackupBackingImageNames(bsDriver)
+	prevBackupBackingImageNames := backupBackingImageNames
+	backupBackingImageNames, err = GetAllBackupBackingImageNames(bsDriver)
 	if err != nil || !util.UnorderedEqual(prevBackupBackingImageNames, backupBackingImageNames) {
 		log.Info("Found new backup backing image, skip block deletion")
 		return nil
 	}
 
 	// only delete the blocks if it is safe to do so
-	if err := cleanupBlocks(bsDriver, blockInfos); err != nil {
+	if err := cleanupBlocks(log, bsDriver, blockInfos); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func checkAndUpdateBlockInfos(bsDriver backupstore.BackupStoreDriver, blockInfos map[string]*common.BlockInfo, backupbackingImageNames []string) bool {
-	log := backupstore.GetLog()
-
+func checkAndUpdateBlockInfos(log *logrus.Entry, bsDriver backupstore.BackupStoreDriver, blockInfos map[string]*common.BlockInfo, backupbackingImageNames []string) bool {
 	for _, name := range backupbackingImageNames {
-		backupBackingImage, err := loadBackingImage(bsDriver, name)
+		backupBackingImage, err := loadBackingImageConfigInBackupStore(bsDriver, name)
 		if err != nil {
 			log.WithError(err).Warn("Failed to load backup backing image, skip block deletion")
 			return false
@@ -585,7 +601,7 @@ func getBlockInfos(bsDriver backupstore.BackupStoreDriver) (map[string]*common.B
 	return blockInfos, nil
 }
 
-func cleanupBlocks(driver backupstore.BackupStoreDriver, blockMap map[string]*common.BlockInfo) error {
+func cleanupBlocks(log *logrus.Entry, driver backupstore.BackupStoreDriver, blockMap map[string]*common.BlockInfo) error {
 	var deletionFailures []string
 	deletedBlockCount := int64(0)
 	for _, blk := range blockMap {
@@ -598,7 +614,6 @@ func cleanupBlocks(driver backupstore.BackupStoreDriver, blockMap map[string]*co
 		}
 	}
 
-	log := backupstore.GetLog()
 	log.Infof("Removed %v blocks", deletedBlockCount)
 
 	if len(deletionFailures) > 0 {
