@@ -36,11 +36,6 @@ const (
 	MessageTypeError = MessageType("error")
 )
 
-type JobResult struct {
-	payload interface{}
-	err     error
-}
-
 type BlockMapping struct {
 	Offset        int64
 	BlockChecksum string
