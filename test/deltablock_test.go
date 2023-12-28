@@ -32,11 +32,11 @@ func (s *TestSuite) TestDeleteDeltaBlockBackup(c *C) {
 		volumeName := "DeltaBlockTestVolume-" + compressionMethod + "-" + strconv.Itoa(concurrentLimit)
 		volume := RawFileVolume{
 			v: backupstore.Volume{
-				Name:               volumeName,
-				Size:               volumeSize,
-				CreatedTime:        util.Now(),
-				CompressionMethod:  compressionMethod,
-				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
+				Name:              volumeName,
+				Size:              volumeSize,
+				CreatedTime:       util.Now(),
+				CompressionMethod: compressionMethod,
+				DataEngine:        string(backupstore.DataEngineV1),
 			},
 		}
 		// Each snapshot will be one more block different from before
