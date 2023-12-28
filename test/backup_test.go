@@ -342,11 +342,11 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 
 		volume := RawFileVolume{
 			v: backupstore.Volume{
-				Name:               volumeNameInTest,
-				Size:               volumeSize,
-				CreatedTime:        util.Now(),
-				CompressionMethod:  compressionMethod,
-				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
+				Name:              volumeNameInTest,
+				Size:              volumeSize,
+				CreatedTime:       util.Now(),
+				CompressionMethod: compressionMethod,
+				DataEngine:        string(backupstore.DataEngineV1),
 			},
 			stopChan: make(chan struct{}),
 		}
@@ -471,11 +471,11 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 
 		volume := RawFileVolume{
 			v: backupstore.Volume{
-				Name:               volumeNameInTest,
-				Size:               volumeSize,
-				CompressionMethod:  compressionMethod,
-				CreatedTime:        util.Now(),
-				BackendStoreDriver: string(backupstore.BackendStoreDriverV1),
+				Name:              volumeNameInTest,
+				Size:              volumeSize,
+				CompressionMethod: compressionMethod,
+				CreatedTime:       util.Now(),
+				DataEngine:        string(backupstore.DataEngineV1),
 			},
 			stopChan: make(chan struct{}),
 		}
