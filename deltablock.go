@@ -607,7 +607,7 @@ func mergeSnapshotMap(deltaBackup, lastBackup *Backup) *Backup {
 }
 
 // RestoreDeltaBlockBackup restores a delta block backup for the given configuration
-func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
+func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) error {
 	if config == nil {
 		return fmt.Errorf("invalid empty config for restore")
 	}
@@ -686,7 +686,8 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 	if err := lock.Lock(); err != nil {
 		return err
 	}
-	go func() {
+
+	go func(ctx context.Context) {
 		var err error
 		currentProgress := 0
 
@@ -713,9 +714,6 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 			}
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
 		blockChan, errChan := populateBlocksForFullRestore(bsDriver, backup)
 
 		errorChans := []<-chan error{errChan}
@@ -731,7 +729,7 @@ func RestoreDeltaBlockBackup(config *DeltaRestoreConfig) error {
 			return
 		}
 		currentProgress = PROGRESS_PERCENTAGE_BACKUP_TOTAL
-	}()
+	}(ctx)
 
 	return nil
 }
