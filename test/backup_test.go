@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -391,7 +392,8 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 				Filename:        restore,
 				ConcurrentLimit: int32(concurrentLimit),
 			}
-			err := backupstore.RestoreDeltaBlockBackup(rConfig)
+
+			err := backupstore.RestoreDeltaBlockBackup(context.Background(), rConfig)
 			c.Assert(err, IsNil)
 			s.waitForRestoreCompletion(c, &volume)
 
@@ -620,7 +622,7 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 				ConcurrentLimit: int32(concurrentLimit),
 			}
 
-			err := backupstore.RestoreDeltaBlockBackup(rConfig)
+			err := backupstore.RestoreDeltaBlockBackup(context.Background(), rConfig)
 			c.Assert(err, IsNil)
 			s.waitForRestoreCompletion(c, &volume)
 
