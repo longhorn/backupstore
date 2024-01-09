@@ -752,7 +752,7 @@ func restoreBlockToFile(bsDriver BackupStoreDriver, volumeName string, volDev *o
 	return err
 }
 
-func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
+func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRestoreConfig) error {
 	if config == nil {
 		return fmt.Errorf("invalid empty config for restore")
 	}
@@ -864,7 +864,7 @@ func RestoreDeltaBlockBackupIncrementally(config *DeltaRestoreConfig) error {
 			}
 		}
 
-		if err := performIncrementalRestore(bsDriver, config, srcVolumeName, volDevName, lastBackup, backup); err != nil {
+		if err := performIncrementalRestore(ctx, bsDriver, config, srcVolumeName, volDevName, lastBackup, backup); err != nil {
 			deltaOps.UpdateRestoreStatus(volDevName, 0, err)
 			return
 		}
@@ -1018,7 +1018,7 @@ func restoreBlocks(ctx context.Context, bsDriver BackupStoreDriver, deltaOps Del
 	return errChan
 }
 
-func performIncrementalRestore(bsDriver BackupStoreDriver, config *DeltaRestoreConfig,
+func performIncrementalRestore(ctx context.Context, bsDriver BackupStoreDriver, config *DeltaRestoreConfig,
 	srcVolumeName, volDevName string, lastBackup *Backup, backup *Backup) error {
 	var err error
 	concurrentLimit := config.ConcurrentLimit
@@ -1026,9 +1026,6 @@ func performIncrementalRestore(bsDriver BackupStoreDriver, config *DeltaRestoreC
 	progress := &progress{
 		totalBlockCounts: int64(len(backup.Blocks) + len(lastBackup.Blocks)),
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	blockChan, errChan := populateBlocksForIncrementalRestore(bsDriver, lastBackup, backup)
 

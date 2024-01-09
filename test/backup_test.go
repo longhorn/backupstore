@@ -637,7 +637,7 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 				ConcurrentLimit: int32(concurrentLimit),
 			}
 
-			err = backupstore.RestoreDeltaBlockBackupIncrementally(rConfig)
+			err = backupstore.RestoreDeltaBlockBackupIncrementally(context.Background(), rConfig)
 			if i == 0 {
 				c.Assert(err, NotNil)
 				c.Assert(err, ErrorMatches, "invalid parameter lastBackupName "+lastBackupName)
