@@ -61,3 +61,7 @@ const (
 	// we use upppercase here so it will be filtered out when listing.
 	BackupBackingImageLockName = "BACKINGIMAGE"
 )
+
+const (
+	ErrorMsgRestoreCancelled = "backup restoration is cancelled"
+)
