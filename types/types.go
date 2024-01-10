@@ -3,9 +3,11 @@ package types
 type ProgressState string
 
 const (
+	ProgressStateUndefined  = ProgressState("")
 	ProgressStateInProgress = ProgressState("in_progress")
 	ProgressStateComplete   = ProgressState("complete")
 	ProgressStateError      = ProgressState("error")
+	ProgressStateCanceled   = ProgressState("canceled")
 )
 
 const (
