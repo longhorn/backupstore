@@ -138,7 +138,10 @@ func CreateDeltaBlockBackup(backupName string, config *DeltaBackupConfig) (isInc
 	defer func() {
 		if err != nil {
 			log.WithError(err).Error("Failed to create delta block backup")
-			deltaOps.UpdateBackupStatus(snapshot.Name, volume.Name, string(types.ProgressStateError), 0, "", err.Error())
+			updateError := deltaOps.UpdateBackupStatus(snapshot.Name, config.Volume.Name, string(types.ProgressStateError), 0, "", err.Error())
+			if updateError != nil {
+				log.WithError(updateError).Error("Failed to update the Backup status by deltaOps.")
+			}
 		}
 	}()
 
