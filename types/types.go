@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 type ProgressState string
 
 const (
@@ -29,6 +31,16 @@ const (
 	NOProxy    = "NO_PROXY"
 
 	VirtualHostedStyle = "VIRTUAL_HOSTED_STYLE"
+
+	LonghornLabelKeyPrefix = "longhorn.io"
+)
+
+const (
+	LonghornBackupOptionBackupMode = "backup-mode"
+	LonghornBackupModeFull         = "full"
+	LonghornBackupModeIncremental  = "incremental"
+
+	LonghornBackupOptionFullBackupInterval = "full-backup-interval"
 )
 
 type Mapping struct {
@@ -57,11 +69,15 @@ const (
 	// For lock mechanism, please refer to: https://github.com/longhorn/longhorn/blob/master/enhancements/20200701-backupstore-file-locks.md#proposal
 	// Currently the lock file is stored in each BackupVolume folder.
 	// For BackingImage Lock it is also stored there with the folder name "BACKINGIMAGE" defined here.
-	// To prevent Longhorn from accidently considering it as another normal BackupVolume,
-	// we use upppercase here so it will be filtered out when listing.
+	// To prevent Longhorn from accidentally considering it as another normal BackupVolume,
+	// we use uppercase here so it will be filtered out when listing.
 	BackupBackingImageLockName = "BACKINGIMAGE"
 )
 
 const (
 	ErrorMsgRestoreCancelled = "backup restoration is cancelled"
 )
+
+func GetLonghornLabelKey(name string) string {
+	return fmt.Sprintf("%s/%s", LonghornLabelKeyPrefix, name)
+}
