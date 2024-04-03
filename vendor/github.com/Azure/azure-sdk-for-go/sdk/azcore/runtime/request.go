@@ -1,5 +1,5 @@
-//go:build go1.16
-// +build go1.16
+//go:build go1.18
+// +build go1.18
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
@@ -15,18 +15,15 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"path"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/pipeline"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/exported"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/shared"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 )
-
-// Pipeline represents a primitive for sending HTTP requests and receiving responses.
-// Its behavior can be extended by specifying policies during construction.
-type Pipeline = pipeline.Pipeline
 
 // Base64Encoding is usesd to specify which base-64 encoder/decoder to use when
 // encoding/decoding a slice of bytes to/from a string.
@@ -41,8 +38,9 @@ const (
 )
 
 // NewRequest creates a new policy.Request with the specified input.
-func NewRequest(ctx context.Context, httpMethod string, endpoint string) (*pipeline.Request, error) {
-	return pipeline.NewRequest(ctx, httpMethod, endpoint)
+// The endpoint MUST be properly encoded before calling this function.
+func NewRequest(ctx context.Context, httpMethod string, endpoint string) (*policy.Request, error) {
+	return exported.NewRequest(ctx, httpMethod, endpoint)
 }
 
 // JoinPaths concatenates multiple URL path segments into one path,
@@ -59,19 +57,23 @@ func JoinPaths(root string, paths ...string) string {
 		root, qps = splitPath[0], splitPath[1]
 	}
 
-	for i := 0; i < len(paths); i++ {
-		root = strings.TrimRight(root, "/")
-		paths[i] = strings.TrimLeft(paths[i], "/")
-		root += "/" + paths[i]
+	p := path.Join(paths...)
+	// path.Join will remove any trailing slashes.
+	// if one was provided, preserve it.
+	if strings.HasSuffix(paths[len(paths)-1], "/") && !strings.HasSuffix(p, "/") {
+		p += "/"
 	}
 
 	if qps != "" {
-		if !strings.HasSuffix(root, "/") {
-			root += "/"
-		}
-		return root + "?" + qps
+		p = p + "?" + qps
 	}
-	return root
+
+	if strings.HasSuffix(root, "/") && strings.HasPrefix(p, "/") {
+		root = root[:len(root)-1]
+	} else if !strings.HasSuffix(root, "/") && !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return root + p
 }
 
 // EncodeByteArray will base-64 encode the byte slice v.
@@ -87,7 +89,7 @@ func EncodeByteArray(v []byte, format Base64Encoding) string {
 func MarshalAsByteArray(req *policy.Request, v []byte, format Base64Encoding) error {
 	// send as a JSON string
 	encode := fmt.Sprintf("\"%s\"", EncodeByteArray(v, format))
-	return req.SetBody(shared.NopCloser(strings.NewReader(encode)), shared.ContentTypeAppJSON)
+	return req.SetBody(exported.NopCloser(strings.NewReader(encode)), shared.ContentTypeAppJSON)
 }
 
 // MarshalAsJSON calls json.Marshal() to get the JSON encoding of v then calls SetBody.
@@ -97,7 +99,7 @@ func MarshalAsJSON(req *policy.Request, v interface{}) error {
 	if err != nil {
 		return fmt.Errorf("error marshalling type %T: %s", v, err)
 	}
-	return req.SetBody(shared.NopCloser(bytes.NewReader(b)), shared.ContentTypeAppJSON)
+	return req.SetBody(exported.NopCloser(bytes.NewReader(b)), shared.ContentTypeAppJSON)
 }
 
 // MarshalAsXML calls xml.Marshal() to get the XML encoding of v then calls SetBody.
@@ -106,7 +108,9 @@ func MarshalAsXML(req *policy.Request, v interface{}) error {
 	if err != nil {
 		return fmt.Errorf("error marshalling type %T: %s", v, err)
 	}
-	return req.SetBody(shared.NopCloser(bytes.NewReader(b)), shared.ContentTypeAppXML)
+	// inclue the XML header as some services require it
+	b = []byte(xml.Header + string(b))
+	return req.SetBody(exported.NopCloser(bytes.NewReader(b)), shared.ContentTypeAppXML)
 }
 
 // SetMultipartFormData writes the specified keys/values as multi-part form
@@ -140,7 +144,7 @@ func SetMultipartFormData(req *policy.Request, formData map[string]interface{}) 
 	if err := writer.Close(); err != nil {
 		return err
 	}
-	return req.SetBody(shared.NopCloser(bytes.NewReader(body.Bytes())), writer.FormDataContentType())
+	return req.SetBody(exported.NopCloser(bytes.NewReader(body.Bytes())), writer.FormDataContentType())
 }
 
 // SkipBodyDownload will disable automatic downloading of the response body.
