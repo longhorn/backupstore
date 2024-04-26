@@ -39,6 +39,7 @@ func Test(t *testing.T) { TestingT(t) }
 type TestSuite struct {
 	BasePath        string
 	BackupStorePath string
+	randFunc        *rand.Rand
 }
 
 var _ = Suite(&TestSuite{})
@@ -234,12 +235,12 @@ func (s *TestSuite) getSnapshotName(snapPrefix string, i int) string {
 
 func (s *TestSuite) randomChange(data []byte, offset, length int64) {
 	for i := int64(0); i < length; i++ {
-		data[offset+i] = letterBytes[rand.Intn(len(letterBytes))]
+		data[offset+i] = letterBytes[s.randFunc.Intn(len(letterBytes))]
 	}
 }
 
 func (s *TestSuite) SetUpSuite(c *C) {
-	rand.Seed(time.Now().UTC().UnixNano())
+	s.randFunc = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	dir, err := os.MkdirTemp("", "backupstore-test")
 	c.Assert(err, IsNil)
@@ -333,7 +334,7 @@ func (s *TestSuite) TestBackupBasic(c *C) {
 		blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
 
 		for i := int64(0); i < blockSize; i++ {
-			data[i] = letterBytes[rand.Intn(len(letterBytes))]
+			data[i] = letterBytes[s.randFunc.Intn(len(letterBytes))]
 		}
 		for i := int64(1); i < volumeContentSize/blockSize; i++ {
 			for j := int64(0); j < blockSize; j++ {
@@ -467,8 +468,8 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		dataEmpty := make([]byte, blockSize)
 		dataModified := make([]byte, blockSize)
 		for i := int64(0); i < blockSize; i++ {
-			data[i] = letterBytes[rand.Intn(len(letterBytes))]
-			dataModified[i] = letterBytes[rand.Intn(len(letterBytes))]
+			data[i] = letterBytes[s.randFunc.Intn(len(letterBytes))]
+			dataModified[i] = letterBytes[s.randFunc.Intn(len(letterBytes))]
 		}
 
 		volume := RawFileVolume{
