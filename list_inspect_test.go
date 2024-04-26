@@ -27,15 +27,15 @@ func (m *mockStoreDriver) Init() {
 	m.fs = afero.NewMemMapFs()
 	m.destURL = mockDriverURL
 
-	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) {
-		m.fs.MkdirAll(filepath.Join(backupstoreBase, VOLUME_DIRECTORY), 0755)
+	RegisterDriver(mockDriverName, func(destURL string) (BackupStoreDriver, error) { // nolint:errcheck
+		m.fs.MkdirAll(filepath.Join(backupstoreBase, VOLUME_DIRECTORY), 0755) // nolint:errcheck
 		return m, nil
 	})
 }
 
 func (m *mockStoreDriver) uninstall() {
-	m.fs.RemoveAll("/")
-	unregisterDriver(mockDriverName)
+	m.fs.RemoveAll("/")              // nolint:errcheck
+	unregisterDriver(mockDriverName) // nolint:errcheck
 }
 
 func (m *mockStoreDriver) Kind() string {
@@ -124,11 +124,14 @@ func TestListBackupVolumeNames(t *testing.T) {
 	assert.Equal(0, len(volumeInfo))
 
 	// create pvc-1 folder and config
-	m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	err = m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	assert.NoError(err)
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	assert.NoError(err)
 
 	// create pvc-2 folder without config
-	m.fs.MkdirAll(getVolumePath("pvc-2"), 0755)
+	err = m.fs.MkdirAll(getVolumePath("pvc-2"), 0755)
+	assert.NoError(err)
 
 	// list backup volume names
 	volumeInfo, err = List("", mockDriverURL, true)
@@ -146,7 +149,8 @@ func TestListBackupVolumeBackups(t *testing.T) {
 	defer m.uninstall()
 
 	// create pvc-1 folder
-	m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	err := m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	assert.NoError(err)
 
 	// list pvc-1 without config
 	volumeInfo, err := List("pvc-1", mockDriverURL, false)
@@ -154,16 +158,19 @@ func TestListBackupVolumeBackups(t *testing.T) {
 	assert.Equal(1, len(volumeInfo["pvc-1"].Messages))
 
 	// create pvc-1 config
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	assert.NoError(err)
 
 	// create backups folder
-	m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	err = m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	assert.NoError(err)
 
 	// create 100 backups config
 	for i := 1; i <= 100; i++ {
 		backup := fmt.Sprintf("backup-%d", i)
-		afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
+		err = afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
 			[]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backup, time.Now().String())), 0644)
+		assert.NoError(err)
 	}
 
 	volumeInfo, err = List("pvc-1", mockDriverURL, false)
@@ -181,7 +188,8 @@ func TestInspectVolume(t *testing.T) {
 	defer m.uninstall()
 
 	// create pvc-1 folder and config
-	m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	err := m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	assert.NoError(err)
 
 	volumeURL := EncodeBackupURL("", "pvc-1", mockDriverURL)
 	volumeInfo, err := InspectVolume(volumeURL)
@@ -189,8 +197,9 @@ func TestInspectVolume(t *testing.T) {
 	assert.Nil(volumeInfo)
 
 	// create pvc-1 config
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"),
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"),
 		[]byte(`{"Name":"pvc-1","Size":"2147483648","CreatedTime":"2021-05-12T00:52:01Z","LastBackupName":"backup-3","LastBackupAt":"2021-05-17T05:31:01Z"}`), 0644)
+	assert.NoError(err)
 
 	// inspect backup volume config
 	volumeURL = EncodeBackupURL("", "pvc-1", mockDriverURL)
@@ -211,7 +220,8 @@ func TestInspectBackup(t *testing.T) {
 	defer m.uninstall()
 
 	// create pvc-1 folder and config
-	m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	err := m.fs.MkdirAll(getVolumePath("pvc-1"), 0755)
+	assert.NoError(err)
 
 	backupURL := EncodeBackupURL("backup-1", "pvc-1", mockDriverURL)
 	backupInfo, err := InspectBackup(backupURL)
@@ -219,28 +229,33 @@ func TestInspectBackup(t *testing.T) {
 	assert.Nil(backupInfo)
 
 	// create pvc-1 config
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"),
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"),
 		[]byte(`{"Name":"pvc-1","Size":"2147483648","CreatedTime":"2021-05-12T00:52:01Z","LastBackupName":"backup-3","LastBackupAt":"2021-05-17T05:31:01Z"}`), 0644)
+	assert.NoError(err)
 
 	// create backups folder
-	m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	err = m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	assert.NoError(err)
 
 	// inspect an invalid backup-1 config
-	afero.WriteFile(m.fs, getBackupConfigPath("backup-1", "pvc-1"), []byte(""), 0644)
+	err = afero.WriteFile(m.fs, getBackupConfigPath("backup-1", "pvc-1"), []byte(""), 0644)
+	assert.NoError(err)
 	backupInfo, err = InspectBackup(backupURL)
 	assert.Error(err)
 	assert.Nil(backupInfo)
 
 	// create a in progress backup-1 config
-	afero.WriteFile(m.fs, getBackupConfigPath("backup-1", "pvc-1"),
+	err = afero.WriteFile(m.fs, getBackupConfigPath("backup-1", "pvc-1"),
 		[]byte(`{"Name":"backup-1"}`), 0644)
+	assert.Error(err)
 	backupInfo, err = InspectBackup(backupURL)
 	assert.Error(err)
 	assert.Nil(backupInfo)
 
 	// create a valid backup-1 config
-	afero.WriteFile(m.fs, getBackupConfigPath("backup-1", "pvc-1"),
+	err = afero.WriteFile(m.fs, getBackupConfigPath("backup-1", "pvc-1"),
 		[]byte(`{"Name":"backup-1","VolumeName":"pvc-1","Size":"115343360","SnapshotName":"1eb35e75-73d8-4e8c-9761-3df6ec35ba9a","SnapshotCreatedAt":"2021-06-07T08:57:23Z","CreatedTime":"2021-06-07T08:57:25Z","Size":"115343360"}`), 0644)
+	assert.NoError(err)
 
 	// inspect backup-1 config
 	backupInfo, err = InspectBackup(backupURL)
@@ -261,12 +276,15 @@ func BenchmarkBackupVolumeNames10ms32volumes(b *testing.B) {
 	// create 32 backup volumes
 	for i := 1; i <= 32; i++ {
 		pvc := fmt.Sprintf("pvc-%d", i)
-		m.fs.MkdirAll(getVolumePath(pvc), 0755)
-		afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		err := m.fs.MkdirAll(getVolumePath(pvc), 0755)
+		assert.NoError(b, err)
+		err = afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("", mockDriverURL, true)
+		_, err := List("", mockDriverURL, true)
+		assert.NoError(b, err)
 	}
 }
 
@@ -278,12 +296,15 @@ func BenchmarkBackupVolumeNames100ms32volumes(b *testing.B) {
 	// create 32 backup volumes
 	for i := 1; i <= 32; i++ {
 		pvc := fmt.Sprintf("pvc-%d", i)
-		m.fs.MkdirAll(getVolumePath(pvc), 0755)
-		afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		err := m.fs.MkdirAll(getVolumePath(pvc), 0755)
+		assert.NoError(b, err)
+		err = afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("", mockDriverURL, true)
+		_, err := List("", mockDriverURL, true)
+		assert.NoError(b, err)
 	}
 }
 
@@ -295,12 +316,15 @@ func BenchmarkBackupVolumeNames250ms32volumes(b *testing.B) {
 	// create 32 backup volumes
 	for i := 1; i <= 32; i++ {
 		pvc := fmt.Sprintf("pvc-%d", i)
-		m.fs.MkdirAll(getVolumePath(pvc), 0755)
-		afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		err := m.fs.MkdirAll(getVolumePath(pvc), 0755)
+		assert.NoError(b, err)
+		err = afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("", mockDriverURL, true)
+		_, err := List("", mockDriverURL, true)
+		assert.NoError(b, err)
 	}
 }
 
@@ -312,12 +336,15 @@ func BenchmarkBackupVolumeNames500ms32volumes(b *testing.B) {
 	// create 32 backup volumes
 	for i := 1; i <= 32; i++ {
 		pvc := fmt.Sprintf("pvc-%d", i)
-		m.fs.MkdirAll(getVolumePath(pvc), 0755)
-		afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		err := m.fs.MkdirAll(getVolumePath(pvc), 0755)
+		assert.NoError(b, err)
+		err = afero.WriteFile(m.fs, getVolumeFilePath(pvc), []byte(fmt.Sprintf(`{"Name":%s}`, pvc)), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("", mockDriverURL, true)
+		_, err := List("", mockDriverURL, true)
+		assert.NoError(b, err)
 	}
 }
 
@@ -327,18 +354,22 @@ func BenchmarkListBackupVolumeBackups10ms(b *testing.B) {
 	defer m.uninstall()
 
 	// create pvc-1 config
-	m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	err := m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	assert.NoError(b, err)
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	assert.NoError(b, err)
 
 	// create 100 backups
 	for i := 1; i <= 100; i++ {
 		backup := fmt.Sprintf("backup-%d", i)
-		afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
+		err = afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
 			[]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backup, time.Now().String())), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("pvc-1", mockDriverURL, false)
+		_, err = List("pvc-1", mockDriverURL, false)
+		assert.NoError(b, err)
 	}
 }
 
@@ -348,18 +379,22 @@ func BenchmarkListBackupVolumeBackups100ms(b *testing.B) {
 	defer m.uninstall()
 
 	// create pvc-1 config
-	m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	err := m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	assert.NoError(b, err)
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	assert.NoError(b, err)
 
 	// create 100 backups
 	for i := 1; i <= 100; i++ {
 		backup := fmt.Sprintf("backup-%d", i)
-		afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
+		err = afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
 			[]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backup, time.Now().String())), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("pvc-1", mockDriverURL, false)
+		_, err = List("pvc-1", mockDriverURL, false)
+		assert.NoError(b, err)
 	}
 }
 
@@ -369,18 +404,22 @@ func BenchmarkListBackupVolumeBackups250ms(b *testing.B) {
 	defer m.uninstall()
 
 	// create pvc-1 config
-	m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	err := m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	assert.NoError(b, err)
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	assert.NoError(b, err)
 
 	// create 100 backups
 	for i := 1; i <= 100; i++ {
 		backup := fmt.Sprintf("backup-%d", i)
-		afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
+		err = afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
 			[]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backup, time.Now().String())), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("pvc-1", mockDriverURL, false)
+		_, err = List("pvc-1", mockDriverURL, false)
+		assert.NoError(b, err)
 	}
 }
 
@@ -390,17 +429,21 @@ func BenchmarkListBackupVolumeBackups500ms(b *testing.B) {
 	defer m.uninstall()
 
 	// create pvc-1 config
-	m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
-	afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	err := m.fs.MkdirAll(getBackupPath("pvc-1"), 0755)
+	assert.NoError(b, err)
+	err = afero.WriteFile(m.fs, getVolumeFilePath("pvc-1"), []byte(`{"Name":"pvc-1"}`), 0644)
+	assert.NoError(b, err)
 
 	// create 100 backups
 	for i := 1; i <= 100; i++ {
 		backup := fmt.Sprintf("backup-%d", i)
-		afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
+		err = afero.WriteFile(m.fs, getBackupConfigPath(backup, "pvc-1"),
 			[]byte(fmt.Sprintf(`{"Name":"%s","CreatedTime":"%s"}`, backup, time.Now().String())), 0644)
+		assert.NoError(b, err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		List("pvc-1", mockDriverURL, false)
+		_, err = List("pvc-1", mockDriverURL, false)
+		assert.NoError(b, err)
 	}
 }
