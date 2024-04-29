@@ -31,5 +31,5 @@ echo Running tests
 
 PACKAGES="$(find -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
 
-go test -race -cover ${PACKAGES}
+go test -race -cover ${PACKAGES} -coverprofile=coverage.out
 
