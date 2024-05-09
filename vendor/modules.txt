@@ -160,12 +160,6 @@ github.com/stretchr/testify/assert
 # github.com/urfave/cli v1.20.0
 ## explicit
 github.com/urfave/cli
-# go.uber.org/atomic v1.7.0
-## explicit; go 1.13
-go.uber.org/atomic
-# go.uber.org/multierr v1.9.0
-## explicit; go 1.19
-go.uber.org/multierr
 # golang.org/x/net v0.23.0
 ## explicit; go 1.18
 golang.org/x/net/http/httpguts
