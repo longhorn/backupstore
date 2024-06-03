@@ -6,9 +6,9 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
 	github.com/aws/aws-sdk-go v1.34.2
-	github.com/gammazero/workerpool v1.1.2
+	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.3.0
-	github.com/pierrec/lz4/v4 v4.1.17
+	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slok/goresilience v0.2.0
@@ -27,7 +27,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/gammazero/deque v0.1.0 // indirect
+	github.com/gammazero/deque v0.2.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
