@@ -4,6 +4,8 @@ go 1.22.0
 
 toolchain go1.22.5
 
+replace github.com/longhorn/go-common-libs v0.0.0-20240707062002-b9354601827e => github.com/chanyilin/go-common-libs v0.0.0-20240716074450-cdf55483e4fc
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
