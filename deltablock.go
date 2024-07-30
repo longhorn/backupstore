@@ -110,7 +110,7 @@ type DeltaBlockBackupOperations interface {
 }
 
 type DeltaRestoreOperations interface {
-	OpenVolumeDev(volDevName string) (*os.File, string, error)
+	OpenVolumeDev(volDevName string, dmDeviceAndEndpointCleanupRequired bool) (*os.File, string, error)
 	CloseVolumeDev(volDev *os.File) error
 	UpdateRestoreStatus(snapshot string, restoreProgress int, err error)
 	Stop()
@@ -735,7 +735,7 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) er
 		return fmt.Errorf("invalid volume size %v", vol.Size)
 	}
 
-	volDev, volDevPath, err := deltaOps.OpenVolumeDev(volDevName)
+	volDev, volDevPath, err := deltaOps.OpenVolumeDev(volDevName, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to open volume device %v", volDevName)
 	}
@@ -894,7 +894,7 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 		}
 	}
 
-	volDev, volDevPath, err := deltaOps.OpenVolumeDev(volDevName)
+	volDev, volDevPath, err := deltaOps.OpenVolumeDev(volDevName, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to open volume device %v", volDevName)
 	}
