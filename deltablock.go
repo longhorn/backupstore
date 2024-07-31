@@ -894,14 +894,14 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 		}
 	}
 
-	volDev, err := os.Create(volDevName)
+	volDev, volDevPath, err := deltaOps.OpenVolumeDev(volDevName)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to open volume device %v", volDevName)
 	}
 	defer func() {
 		// make sure to close the device
 		if err != nil {
-			_ = volDev.Close()
+			_ = deltaOps.CloseVolumeDev(volDev)
 		}
 	}()
 
@@ -933,8 +933,8 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 		return err
 	}
 	go func() {
-		defer volDev.Close()
 		defer func() {
+			_ = deltaOps.CloseVolumeDev(volDev)
 			if unlockErr := lock.Unlock(); unlockErr != nil {
 				logrus.WithError(err).Warn("Failed to unlock")
 			}
@@ -945,15 +945,15 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 		// closed.
 		// https://github.com/longhorn/longhorn/issues/2503
 		// We want to truncate regular files, but not device
-		if stat.Mode()&os.ModeType == 0 {
-			log.Debugf("Truncate %v to size %v", volDevName, vol.Size)
+		if stat.Mode().IsRegular() {
+			log.Infof("Truncate %v to size %v", volDevName, vol.Size)
 			if err := volDev.Truncate(vol.Size); err != nil {
 				deltaOps.UpdateRestoreStatus(volDevName, 0, err)
 				return
 			}
 		}
 
-		if err := performIncrementalRestore(ctx, bsDriver, config, srcVolumeName, volDevName, lastBackup, backup); err != nil {
+		if err := performIncrementalRestore(ctx, bsDriver, config, srcVolumeName, volDevPath, lastBackup, backup); err != nil {
 			deltaOps.UpdateRestoreStatus(volDevName, 0, err)
 			return
 		}
@@ -1107,7 +1107,7 @@ func restoreBlocks(ctx context.Context, bsDriver BackupStoreDriver, deltaOps Del
 }
 
 func performIncrementalRestore(ctx context.Context, bsDriver BackupStoreDriver, config *DeltaRestoreConfig,
-	srcVolumeName, volDevName string, lastBackup *Backup, backup *Backup) error {
+	srcVolumeName, volDevPath string, lastBackup *Backup, backup *Backup) error {
 	var err error
 	concurrentLimit := config.ConcurrentLimit
 
@@ -1119,7 +1119,7 @@ func performIncrementalRestore(ctx context.Context, bsDriver BackupStoreDriver, 
 
 	errorChans := []<-chan error{errChan}
 	for i := 0; i < int(concurrentLimit); i++ {
-		errorChans = append(errorChans, restoreBlocks(ctx, bsDriver, config.DeltaOps, config.Filename, srcVolumeName, blockChan, progress))
+		errorChans = append(errorChans, restoreBlocks(ctx, bsDriver, config.DeltaOps, volDevPath, srcVolumeName, blockChan, progress))
 	}
 
 	mergedErrChan := mergeErrorChannels(ctx, errorChans...)
