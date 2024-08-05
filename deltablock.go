@@ -843,8 +843,9 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 	lastBackupName := config.LastBackupName
 	deltaOps := config.DeltaOps
 	if deltaOps == nil {
-		return fmt.Errorf("missing DeltaBlockBackupOperations")
+		return fmt.Errorf("missing DeltaRestoreOperations")
 	}
+
 	bsDriver, err := GetBackupStoreDriver(backupURL)
 	if err != nil {
 		return err
@@ -936,7 +937,7 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 		defer func() {
 			_ = deltaOps.CloseVolumeDev(volDev)
 			if unlockErr := lock.Unlock(); unlockErr != nil {
-				logrus.WithError(err).Warn("Failed to unlock")
+				logrus.WithError(unlockErr).Warn("Failed to unlock")
 			}
 		}()
 
