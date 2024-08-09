@@ -70,7 +70,7 @@ type RawFileVolume struct {
 	stopChan        chan struct{}
 }
 
-func (r *RawFileVolume) OpenVolumeDev(volDevName string) (*os.File, string, error) {
+func (r *RawFileVolume) OpenVolumeDev(volDevName string, dmDeviceAndEndpointCleanupRequired bool) (*os.File, string, error) {
 	if _, err := os.Stat(volDevName); err == nil {
 		logrus.WithError(err).Warnf("File %s for the restore exists, will remove and re-create it", volDevName)
 		if err := os.RemoveAll(volDevName); err != nil {
