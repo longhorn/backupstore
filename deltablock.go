@@ -741,7 +741,9 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) er
 	}
 	defer func() {
 		if err != nil {
-			_ = deltaOps.CloseVolumeDev(volDev)
+			if _err := deltaOps.CloseVolumeDev(volDev); _err != nil {
+				logrus.WithError(_err).Warnf("Failed to close volume device %v", volDevName)
+			}
 		}
 	}()
 
@@ -775,7 +777,10 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) er
 		currentProgress := 0
 
 		defer func() {
-			_ = deltaOps.CloseVolumeDev(volDev)
+			if _err := deltaOps.CloseVolumeDev(volDev); _err != nil {
+				logrus.WithError(_err).Warnf("Failed to close volume device %v", volDevName)
+			}
+
 			deltaOps.UpdateRestoreStatus(volDevName, currentProgress, err)
 			if unlockErr := lock.Unlock(); unlockErr != nil {
 				logrus.WithError(unlockErr).Warn("Failed to unlock")
@@ -902,7 +907,9 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 	defer func() {
 		// make sure to close the device
 		if err != nil {
-			_ = deltaOps.CloseVolumeDev(volDev)
+			if _err := deltaOps.CloseVolumeDev(volDev); _err != nil {
+				logrus.WithError(_err).Warnf("Failed to close volume device %v", volDevName)
+			}
 		}
 	}()
 
@@ -938,7 +945,9 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 		finalProgress := 0
 
 		defer func() {
-			_ = deltaOps.CloseVolumeDev(volDev)
+			if _err := deltaOps.CloseVolumeDev(volDev); _err != nil {
+				logrus.WithError(_err).Warnf("Failed to close volume device %v", volDevName)
+			}
 
 			deltaOps.UpdateRestoreStatus(volDevName, finalProgress, err)
 
