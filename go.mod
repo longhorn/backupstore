@@ -2,7 +2,7 @@ module github.com/longhorn/backupstore
 
 go 1.22.0
 
-toolchain go1.23.0
+toolchain go1.23.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.6.0
-	github.com/longhorn/go-common-libs v0.0.0-20240821134112-907f57efd48f
+	github.com/longhorn/go-common-libs v0.0.0-20240906072425-66d5f9e6ae4e
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
@@ -19,7 +19,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.15
 	golang.org/x/net v0.28.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/sys v0.25.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	k8s.io/apimachinery v0.31.0
 	k8s.io/mount-utils v0.31.0
