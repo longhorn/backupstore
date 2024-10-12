@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.6.0
-	github.com/longhorn/go-common-libs v0.0.0-20241005131830-a0195307257b
+	github.com/longhorn/go-common-libs v0.0.0-20241012153249-4c71f1cbdd9e
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
@@ -51,7 +51,7 @@ require (
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
+	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect

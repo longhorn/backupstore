@@ -139,7 +139,7 @@ github.com/kr/pretty
 # github.com/kr/text v0.2.0
 ## explicit
 github.com/kr/text
-# github.com/longhorn/go-common-libs v0.0.0-20241005131830-a0195307257b
+# github.com/longhorn/go-common-libs v0.0.0-20241012153249-4c71f1cbdd9e
 ## explicit; go 1.22.0
 github.com/longhorn/go-common-libs/backup
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
@@ -231,8 +231,8 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/protobuf v1.34.2
-## explicit; go 1.20
+# google.golang.org/protobuf v1.35.1
+## explicit; go 1.21
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
