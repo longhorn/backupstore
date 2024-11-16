@@ -6,7 +6,7 @@ toolchain go1.23.3
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.4.1
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.5.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.6.0
