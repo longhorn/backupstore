@@ -139,7 +139,7 @@ github.com/kr/pretty
 # github.com/kr/text v0.2.0
 ## explicit
 github.com/kr/text
-# github.com/longhorn/go-common-libs v0.0.0-20241128023039-4d6c3a880dbc
+# github.com/longhorn/go-common-libs v0.0.0-20241206085105-b60ef86c0b25
 ## explicit; go 1.22.7
 github.com/longhorn/go-common-libs/backup
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
