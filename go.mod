@@ -1,6 +1,6 @@
 module github.com/longhorn/backupstore
 
-go 1.22.7
+go 1.23.0
 
 toolchain go1.23.4
 
@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.6.0
-	github.com/longhorn/go-common-libs v0.0.0-20241216021717-a609e68bc20b
+	github.com/longhorn/go-common-libs v0.0.0-20241216082245-2bf72d23f8b9
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
@@ -40,7 +40,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
-	github.com/moby/sys/mountinfo v0.7.1 // indirect
+	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/opencontainers/runc v1.1.14 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20220909204839-494a5a6aca78 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
