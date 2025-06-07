@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.6.0
-	github.com/longhorn/go-common-libs v0.0.0-20250524033713-74041234ac93
+	github.com/longhorn/go-common-libs v0.0.0-20250604144850-3295fad1e72f
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
