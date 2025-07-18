@@ -70,6 +70,8 @@ type RawFileVolume struct {
 	stopChan        chan struct{}
 }
 
+var _ backupstore.DeltaBlockBackupOperations = new(RawFileVolume)
+
 func (r *RawFileVolume) OpenVolumeDev(volDevName string) (*os.File, string, error) {
 	if _, err := os.Stat(volDevName); err == nil {
 		logrus.WithError(err).Warnf("File %s for the restore exists, will remove and re-create it", volDevName)
@@ -151,10 +153,10 @@ func (r *RawFileVolume) HasSnapshot(id, volumeID string) bool {
 	return ok == nil
 }
 
-func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*types.Mappings, error) {
+func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string, blockSize int64) (*types.Mappings, error) {
 	mappings := types.Mappings{
 		Mappings:  []types.Mapping{},
-		BlockSize: backupstore.DEFAULT_BLOCK_SIZE,
+		BlockSize: blockSize,
 	}
 
 	snap1, err := os.Open(id)
@@ -163,8 +165,6 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string) (*types.
 		return nil, err
 	}
 	defer snap1.Close()
-
-	blockSize := int64(backupstore.DEFAULT_BLOCK_SIZE)
 
 	if compareID == "" {
 		emptyData := make([]byte, blockSize)
