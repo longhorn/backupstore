@@ -16,11 +16,11 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/cockroachdb/errors"
 	"github.com/longhorn/backupstore"
 	_ "github.com/longhorn/backupstore/nfs"
 	"github.com/longhorn/backupstore/types"
 	"github.com/longhorn/backupstore/util"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
