@@ -164,7 +164,9 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string, blockSiz
 		fmt.Println("Failed to open", id)
 		return nil, err
 	}
-	defer snap1.Close()
+	defer func() {
+		_ = snap1.Close()
+	}()
 
 	if compareID == "" {
 		emptyData := make([]byte, blockSize)
@@ -189,7 +191,9 @@ func (r *RawFileVolume) CompareSnapshot(id, compareID, volumeID string, blockSiz
 		fmt.Println("Failed to open", compareID)
 		return nil, err
 	}
-	defer snap2.Close()
+	defer func() {
+		_ = snap2.Close()
+	}()
 
 	for i := int64(0); i < volumeContentSize/blockSize; i++ {
 		offset := i * blockSize
@@ -494,7 +498,9 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 		// snap0: blk * 4
 		snap0, err := os.Create(volume.Snapshots[0].Name)
 		c.Assert(err, IsNil)
-		defer snap0.Close()
+		defer func() {
+			_ = snap0.Close()
+		}()
 		for i := int64(0); i < 4; i++ {
 			_, err := snap0.WriteAt(data, i*blockSize)
 			c.Assert(err, IsNil)
@@ -649,7 +655,7 @@ func (s *TestSuite) TestBackupRestoreExtra(c *C) {
 				deltaName := "delta" + strconv.Itoa(i)
 				err = exec.Command("diff", restoreIncre, deltaName).Run()
 				c.Assert(err, IsNil)
-				os.Remove(deltaName)
+				_ = os.Remove(deltaName)
 			}
 
 			backupInfo, err := backupstore.InspectBackup(backup)
