@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -62,58 +63,63 @@ func mergeErrorChannels(ctx context.Context, channels ...<-chan error) <-chan er
 	return out
 }
 
+var backoffDuration = [...]time.Duration{
+	time.Second,
+	5 * time.Second,
+	30 * time.Second,
+}
+
 // DecompressAndVerifyWithFallback decompresses the given data and verifies the data integrity.
 // If the decompression fails, it will try to decompress with the fallback method.
 func DecompressAndVerifyWithFallback(bsDriver BackupStoreDriver, blkFile, decompression, checksum string) (io.Reader, error) {
-	// Helper function to read block from backup store
-	readBlock := func() (io.ReadCloser, error) {
+	attempts := 0
+	var lastErr error
+	for {
 		rc, err := bsDriver.Read(blkFile)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to read block %v", blkFile)
+			lastErr = err
+			if attempts < len(backoffDuration) {
+				time.Sleep(backoffDuration[attempts])
+				attempts++
+				continue
+			}
+			return nil, errors.Wrapf(lastErr, "failed to read block %v after %d attempts", blkFile, attempts+1)
 		}
-		return rc, nil
-	}
 
-	// First attempt to read and decompress/verify
-	rc, err := readBlock()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rc.Close()
-	}()
-
-	r, err := util.DecompressAndVerify(decompression, rc, checksum)
-	if err == nil {
-		return r, nil
-	}
-
-	// If there's an error, determine the alternative decompression method
-	alternativeDecompression := ""
-	if strings.Contains(err.Error(), gzip.ErrHeader.Error()) {
-		alternativeDecompression = "lz4"
-	} else if strings.Contains(err.Error(), "lz4: bad magic number") {
-		alternativeDecompression = "gzip"
-	}
-
-	// Second attempt with alternative decompression, if applicable
-	if alternativeDecompression != "" {
-		retriedRc, err := readBlock()
-		if err != nil {
-			return nil, err
+		r, err := util.DecompressAndVerify(decompression, rc, checksum)
+		if err == nil {
+			return r, nil
 		}
-		defer func() {
-			_ = retriedRc.Close()
-		}()
 
-		r, err = util.DecompressAndVerify(alternativeDecompression, retriedRc, checksum)
-		if err != nil {
-			return nil, errors.Wrapf(err, "fallback decompression also failed for block %v", blkFile)
+		alternativeDecompression := ""
+		if strings.Contains(err.Error(), gzip.ErrHeader.Error()) {
+			alternativeDecompression = "lz4"
+		} else if strings.Contains(err.Error(), "lz4: bad magic number") {
+			alternativeDecompression = "gzip"
 		}
-		return r, nil
-	}
 
-	return nil, errors.Wrapf(err, "decompression verification failed for block %v", blkFile)
+		if alternativeDecompression != "" {
+			rcAlt, errAlt := bsDriver.Read(blkFile)
+			if errAlt != nil {
+				lastErr = errAlt
+			} else {
+				rAlt, errAlt := util.DecompressAndVerify(alternativeDecompression, rcAlt, checksum)
+				if errAlt == nil {
+					return rAlt, nil
+				}
+				lastErr = errors.Wrapf(errAlt, "fallback decompression also failed for block %v", blkFile)
+			}
+		} else {
+			lastErr = errors.Wrapf(err, "decompression verification failed for block %v", blkFile)
+		}
+
+		if attempts < len(backoffDuration) {
+			time.Sleep(backoffDuration[attempts])
+			attempts++
+			continue
+		}
+		return nil, lastErr
+	}
 }
 
 func getBlockSizeFromParameters(parameters map[string]string) (int64, error) {

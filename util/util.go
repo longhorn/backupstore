@@ -119,14 +119,13 @@ func CompressData(method string, data []byte) (io.ReadSeeker, error) {
 }
 
 // DecompressAndVerify decompresses the given data and verifies the data integrity
-func DecompressAndVerify(method string, src io.Reader, checksum string) (io.Reader, error) {
+func DecompressAndVerify(method string, src io.ReadCloser, checksum string) (io.Reader, error) {
+	defer src.Close()
 	r, err := newDecompressionReader(method, src)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create decompression reader")
 	}
-	defer func() {
-		_ = r.Close()
-	}()
+	defer r.Close()
 	block, err := io.ReadAll(r)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read decompressed data")

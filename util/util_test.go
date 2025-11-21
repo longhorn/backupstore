@@ -68,7 +68,7 @@ func (s *TestSuite) TestCompress(c *C) {
 		compressed, err := CompressData(compressionMethod, data)
 		c.Assert(err, IsNil)
 
-		decompressed, err := DecompressAndVerify(compressionMethod, compressed, checksum)
+		decompressed, err := DecompressAndVerify(compressionMethod, io.NopCloser(compressed), checksum)
 		c.Assert(err, IsNil)
 
 		result, err := io.ReadAll(decompressed)
