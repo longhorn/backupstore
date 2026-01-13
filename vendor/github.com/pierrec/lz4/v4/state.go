@@ -38,15 +38,11 @@ func (s *_State) reset() {
 	s.err = nil
 }
 
-// next sets the state to the next one unless it is passed a non-nil error.
-// It returns whether it is in error.
+// next sets the state to the next one unless it is passed a non nil error.
+// It returns whether or not it is in error.
 func (s *_State) next(err error) bool {
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			s.err = io.EOF
-		} else {
-			s.err = fmt.Errorf("%s: %w", s.state, err)
-		}
+		s.err = fmt.Errorf("%s: %w", s.state, err)
 		s.state = errorState
 		return true
 	}
@@ -65,12 +61,10 @@ func (s *_State) check(errp *error) {
 		return
 	}
 	if err := *errp; err != nil {
-		if errors.Is(err, io.EOF) {
-			s.err = io.EOF
-		} else {
-			s.err = fmt.Errorf("%w[%s]", err, s.state)
+		s.err = fmt.Errorf("%w[%s]", err, s.state)
+		if !errors.Is(err, io.EOF) {
+			s.state = errorState
 		}
-		s.state = errorState
 	}
 }
 
