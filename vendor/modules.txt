@@ -315,8 +315,8 @@ github.com/slok/goresilience
 github.com/slok/goresilience/errors
 github.com/slok/goresilience/metrics
 github.com/slok/goresilience/timeout
-# github.com/spf13/afero v1.11.0
-## explicit; go 1.19
+# github.com/spf13/afero v1.15.0
+## explicit; go 1.23.0
 github.com/spf13/afero
 github.com/spf13/afero/internal/common
 github.com/spf13/afero/mem

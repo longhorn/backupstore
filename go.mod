@@ -20,7 +20,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.23
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/goresilience v0.2.0
-	github.com/spf13/afero v1.11.0
+	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli v1.22.17
 	golang.org/x/net v0.47.0
