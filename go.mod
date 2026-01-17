@@ -23,6 +23,7 @@ require (
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli v1.22.17
+	github.com/urfave/cli/v3 v3.6.1
 	golang.org/x/net v0.49.0
 	golang.org/x/sys v0.40.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
