@@ -7,7 +7,7 @@ go: true
 clear-output-folder: false
 version: "^3.0.0"
 license-header: MICROSOFT_MIT_NO_VERSION
-input-file: "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/f6f50c6388fd5836fa142384641b8353a99874ef/specification/storage/data-plane/Microsoft.BlobStorage/stable/2024-08-04/blob.json"
+input-file: "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/b6472ffd34d5d4a155101b41b4eb1f356abff600/specification/storage/data-plane/Microsoft.BlobStorage/stable/2026-02-06/blob.json"
 credential-scope: "https://storage.azure.com/.default"
 output-folder: ../generated
 file-prefix: "zz_"
@@ -22,6 +22,18 @@ export-clients: true
 use: "@autorest/go@4.0.0-preview.65"
 ```
 
+### Add a Properties field to the BlobPrefix definition
+```yaml
+directive:
+- from: swagger-document
+  where: $.definitions
+  transform: >
+    $.BlobPrefix.properties["Properties"] = {
+      "type": "object",
+      "$ref": "#/definitions/BlobPropertiesInternal"
+    };
+```
+
 ### Add Owner,Group,Permissions,Acl,ResourceType in ListBlob Response
 ``` yaml
 directive:  
@@ -29,19 +41,19 @@ directive:
   where: $.definitions
   transform: >
     $.BlobPropertiesInternal.properties["Owner"] = {
-    "type" : "string",
+      "type" : "string",
     };
     $.BlobPropertiesInternal.properties["Group"] = {
-    "type" : "string",
+      "type" : "string",
     };
     $.BlobPropertiesInternal.properties["Permissions"] = {
-    "type" : "string",
+      "type" : "string",
     };
     $.BlobPropertiesInternal.properties["Acl"] = {
-    "type" : "string",
+      "type" : "string",
     };
     $.BlobPropertiesInternal.properties["ResourceType"] = {
-    "type" : "string",
+      "type" : "string",
     };
 
 ```
@@ -55,7 +67,7 @@ directive:
     $.items.enum.push("permissions");
 ```
 
-### Updating service version to 2024-11-04
+### Updating service version to 2026-02-06
 ```yaml
 directive:
 - from: 
@@ -68,7 +80,7 @@ directive:
   where: $
   transform: >-
     return $.
-      replaceAll(`[]string{"2024-08-04"}`, `[]string{ServiceVersion}`);
+      replaceAll(`[]string{"2025-11-05"}`, `[]string{ServiceVersion}`);
 ```
 
 ### Fix CRC Response Header in PutBlob response
@@ -359,6 +371,8 @@ directive:
       replace(/result\.ETag\s+=\s+&val/g, `result.ETag = (*azcore.ETag)(&val)`).
       replace(/\*modifiedAccessConditions.IfMatch/g, `string(*modifiedAccessConditions.IfMatch)`).
       replace(/\*modifiedAccessConditions.IfNoneMatch/g, `string(*modifiedAccessConditions.IfNoneMatch)`).
+      replace(/\*blobModifiedAccessConditions.IfMatch/g, `string(*blobModifiedAccessConditions.IfMatch)`).
+      replace(/\*blobModifiedAccessConditions.IfNoneMatch/g, `string(*blobModifiedAccessConditions.IfNoneMatch)`).
       replace(/\*sourceModifiedAccessConditions.SourceIfMatch/g, `string(*sourceModifiedAccessConditions.SourceIfMatch)`).
       replace(/\*sourceModifiedAccessConditions.SourceIfNoneMatch/g, `string(*sourceModifiedAccessConditions.SourceIfNoneMatch)`);
 ```
@@ -410,11 +424,13 @@ directive:
 
 ``` yaml
 directive:
-  - from: zz_service_client.go
-    where: $
-    transform: >-
-      return $.
-        replace(/req.Raw\(\).URL.RawQuery \= reqQP.Encode\(\)/, `req.Raw().URL.RawQuery = strings.Replace(reqQP.Encode(), "+", "%20", -1)`)
+- from: 
+  - zz_service_client.go
+  - zz_container_client.go
+  where: $
+  transform: >-
+    return $.
+      replace(/req.Raw\(\).URL.RawQuery \= reqQP.Encode\(\)/g, `req.Raw().URL.RawQuery = strings.Replace(reqQP.Encode(), "+", "%20", -1)`);
 ```
 
 ### Change `where` parameter in blob filtering to be required

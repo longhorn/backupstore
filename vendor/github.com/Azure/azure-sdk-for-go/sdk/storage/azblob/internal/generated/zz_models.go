@@ -86,6 +86,9 @@ type BlobName struct {
 type BlobPrefix struct {
 	// REQUIRED
 	Name *string `xml:"Name"`
+
+	// Properties of a blob
+	Properties *BlobProperties `xml:"Properties"`
 }
 
 // BlobProperties - Properties of a blob
@@ -487,7 +490,10 @@ type StaticWebsite struct {
 }
 
 type StorageError struct {
-	Message *string
+	CopySourceErrorCode    *string
+	CopySourceErrorMessage *string
+	CopySourceStatusCode   *int32
+	Message                *string
 }
 
 // StorageServiceProperties - Storage Service Properties.
