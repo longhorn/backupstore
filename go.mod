@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.8
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.2
-	github.com/aws/smithy-go v1.23.2
+	github.com/aws/smithy-go v1.24.0
 	github.com/cockroachdb/errors v1.12.0
 	github.com/gammazero/workerpool v1.1.3
 	github.com/google/uuid v1.6.0
