@@ -10,6 +10,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/cockroachdb/errors"
@@ -20,11 +22,7 @@ import (
 )
 
 const (
-	azureURL           = "core.windows.net"
-	azureConnNameKey   = "AccountName=%s;AccountKey=%s;"
-	blobEndpoint       = "BlobEndpoint=%s;"
-	blobEndpointScheme = "DefaultEndpointsProtocol=%s;"
-	blobEndpointSuffix = "EndpointSuffix=%s;"
+	azureURL = "core.windows.net"
 )
 
 type service struct {
@@ -46,19 +44,14 @@ func newService(u *url.URL) (*service, error) {
 	accountKey := os.Getenv("AZBLOB_ACCOUNT_KEY")
 	azureEndpoint := os.Getenv("AZBLOB_ENDPOINT")
 
-	connStr := fmt.Sprintf(azureConnNameKey, accountName, accountKey)
-	if azureEndpoint != "" {
-		blobEndpointURL := fmt.Sprintf("%s/%s", strings.TrimRight(azureEndpoint, "/"), accountName)
-		endPointURL, err := url.Parse(azureEndpoint)
-		if err != nil {
-			return nil, err
-		}
-		connStr = fmt.Sprintf(blobEndpointScheme+connStr+blobEndpoint, endPointURL.Scheme, blobEndpointURL)
+	if accountName == "" {
+		accountName = extractAccountNameFromURL(u)
+	}
+	if accountName == "" {
+		return nil, fmt.Errorf("AZBLOB_ACCOUNT_NAME is required")
 	}
 
-	if s.EndpointSuffix != azureURL {
-		connStr = connStr + fmt.Sprintf(blobEndpointSuffix, s.EndpointSuffix)
-	}
+	serviceURL := buildServiceURL(accountName, azureEndpoint, s.EndpointSuffix)
 
 	customCerts := getCustomCerts()
 	httpClient, err := http.GetClientWithCustomCerts(customCerts)
@@ -66,13 +59,76 @@ func newService(u *url.URL) (*service, error) {
 		return nil, err
 	}
 	opts := azblobsvc.ClientOptions{ClientOptions: azcore.ClientOptions{Transport: httpClient}}
-	serviceClient, err := azblobsvc.NewClientFromConnectionString(connStr, &opts)
-	if err != nil {
-		return nil, err
+
+	var serviceClient *azblobsvc.Client
+
+	if accountKey != "" {
+		log.Infof("Using SharedKeyCredential for Azure Blob Storage (account: %s)", accountName)
+		cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SharedKeyCredential: %w", err)
+		}
+		serviceClient, err = azblobsvc.NewClientWithSharedKeyCredential(serviceURL, cred, &opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create service client with SharedKeyCredential: %w", err)
+		}
+	} else {
+		// Azure AD authentication via DefaultAzureCredential
+		// Automatically chains through: EnvironmentCredential, WorkloadIdentityCredential,
+		// ManagedIdentityCredential, AzureCLICredential
+		log.Infof("Using DefaultAzureCredential for Azure Blob Storage (account: %s)", accountName)
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create DefaultAzureCredential: %w", err)
+		}
+		serviceClient, err = azblobsvc.NewClient(serviceURL, cred, &opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create service client with DefaultAzureCredential: %w", err)
+		}
 	}
 
 	s.ContainerClient = serviceClient.NewContainerClient(s.Container)
 	return &s, nil
+}
+
+// extractAccountNameFromURL attempts to extract the storage account name from the backup target URL.
+// For URLs like azblob://container@mystorageaccount.blob.core.windows.net/path,
+// the account name is the first part of the host before ".blob.".
+func extractAccountNameFromURL(u *url.URL) string {
+	if u.User != nil && u.Host != "" {
+		// Check if host contains ".blob." indicating full endpoint format
+		// e.g., "mystorageaccount.blob.core.windows.net"
+		if idx := strings.Index(u.Host, ".blob."); idx > 0 {
+			return u.Host[:idx]
+		}
+	}
+	return ""
+}
+
+// isFullBlobEndpoint checks if the host is a full blob endpoint (contains ".blob.")
+// vs just an endpoint suffix like "core.windows.net" or "core.chinacloudapi.cn"
+func isFullBlobEndpoint(host string) bool {
+	return strings.Contains(host, ".blob.")
+}
+
+func buildServiceURL(accountName, customEndpoint, endpointSuffix string) string {
+	if customEndpoint != "" {
+		// Custom endpoint (e.g., Azurite or sovereign cloud)
+		return fmt.Sprintf("%s/%s", strings.TrimRight(customEndpoint, "/"), accountName)
+	}
+	if endpointSuffix != "" {
+		// Check if endpointSuffix is already a full blob endpoint
+		// e.g., "mystorageaccount.blob.core.windows.net"
+		if isFullBlobEndpoint(endpointSuffix) {
+			return fmt.Sprintf("https://%s", endpointSuffix)
+		}
+		// Legacy format: endpoint suffix like "core.chinacloudapi.cn"
+		if endpointSuffix != azureURL {
+			return fmt.Sprintf("https://%s.blob.%s", accountName, endpointSuffix)
+		}
+	}
+	// Default Azure public cloud
+	return fmt.Sprintf("https://%s.blob.%s", accountName, azureURL)
 }
 
 func getCustomCerts() []byte {

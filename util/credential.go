@@ -66,16 +66,29 @@ func setupAZBlobCredential(credential map[string]string) error {
 		return nil
 	}
 
+	// Account key authentication validation (only if account key is provided)
 	if credential[types.AZBlobAccountName] == "" && credential[types.AZBlobAccountKey] != "" {
 		return errors.New("azure Blob Storage credential account name not found")
 	}
-	if credential[types.AZBlobAccountName] != "" && credential[types.AZBlobAccountKey] == "" {
-		return errors.New("azure Blob Storage credential account key not found")
-	}
 
+	// Set standard Azure Blob credentials
 	_ = os.Setenv(types.AZBlobAccountName, credential[types.AZBlobAccountName])
 	_ = os.Setenv(types.AZBlobAccountKey, credential[types.AZBlobAccountKey])
 	_ = os.Setenv(types.AZBlobEndpoint, credential[types.AZBlobEndpoint])
+
+	// Set Azure identity credentials only if provided in the secret.
+	// Don't overwrite values that may have been injected by AKS Workload Identity webhook.
+	if credential[types.AzureClientID] != "" {
+		_ = os.Setenv(types.AzureClientID, credential[types.AzureClientID])
+	}
+	if credential[types.AzureTenantID] != "" {
+		_ = os.Setenv(types.AzureTenantID, credential[types.AzureTenantID])
+	}
+	if credential[types.AzureClientSecret] != "" {
+		_ = os.Setenv(types.AzureClientSecret, credential[types.AzureClientSecret])
+	}
+
+	// Proxy settings
 	_ = os.Setenv(types.HTTPSProxy, credential[types.HTTPSProxy])
 	_ = os.Setenv(types.HTTPProxy, credential[types.HTTPProxy])
 	_ = os.Setenv(types.NOProxy, credential[types.NOProxy])
@@ -107,6 +120,10 @@ func getAZBlobCredentialFromEnvVars() (map[string]string, error) {
 	credential[types.AZBlobAccountKey] = os.Getenv(types.AZBlobAccountKey)
 	credential[types.AZBlobEndpoint] = os.Getenv(types.AZBlobEndpoint)
 	credential[types.AZBlobCert] = os.Getenv(types.AZBlobCert)
+	credential[types.AzureClientID] = os.Getenv(types.AzureClientID)
+	credential[types.AzureTenantID] = os.Getenv(types.AzureTenantID)
+	credential[types.AzureClientSecret] = os.Getenv(types.AzureClientSecret)
+
 	credential[types.HTTPSProxy] = os.Getenv(types.HTTPSProxy)
 	credential[types.HTTPProxy] = os.Getenv(types.HTTPProxy)
 	credential[types.NOProxy] = os.Getenv(types.NOProxy)

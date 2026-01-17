@@ -24,6 +24,10 @@ const (
 	AZBlobEndpoint    = "AZBLOB_ENDPOINT"
 	AZBlobCert        = "AZBLOB_CERT"
 
+	AzureClientID     = "AZURE_CLIENT_ID"
+	AzureTenantID     = "AZURE_TENANT_ID"
+	AzureClientSecret = "AZURE_CLIENT_SECRET"
+
 	HTTPSProxy = "HTTPS_PROXY"
 	HTTPProxy  = "HTTP_PROXY"
 	NOProxy    = "NO_PROXY"
