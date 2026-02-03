@@ -63,7 +63,7 @@ func (r *Reader) Apply(options ...Option) (err error) {
 	return
 }
 
-// Size returns the size of the current frame's uncompressed data, if set in the stream.
+// Size returns the size of the underlying uncompressed data, if set in the stream.
 func (r *Reader) Size() int {
 	switch r.state.state {
 	case readState, closedState:
@@ -217,8 +217,10 @@ func (r *Reader) read(buf []byte) (int, error) {
 // initial state from NewReader, but instead reading from reader.
 // No access to reader is performed.
 func (r *Reader) Reset(reader io.Reader) {
-	lz4block.Put(r.data)
-	r.data = nil
+	if r.data != nil {
+		lz4block.Put(r.data)
+		r.data = nil
+	}
 	r.frame.Reset(r.num)
 	r.state.reset()
 	r.src = reader
@@ -265,19 +267,24 @@ func (r *Reader) WriteTo(w io.Writer) (n int64, err error) {
 		switch err {
 		case nil:
 		case lz4errors.ErrEndOfStream:
+
 			// Read Checksum.
 			err = r.frame.CloseR(r.src)
 			if err != nil {
 				return
 			}
-			// Check for a new stream.
+
+			//Check for new stream.
 			r.Reset(r.src)
 			if err = r.init(); r.state.next(err) {
+
 				if err == io.EOF {
 					err = nil
 				}
+
 				return
 			}
+
 			goto read
 		case io.EOF:
 			err = r.frame.CloseR(r.src)
