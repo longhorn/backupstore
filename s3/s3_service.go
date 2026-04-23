@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,10 +41,52 @@ const (
 	// AWSRetryMaximumBackoff specifies the maximum duration between retried attempts.
 	AWSRetryMaximumBackoff = 300 * time.Second
 
+	// EnvAWSRetryMaxAttempts overrides AWSRetryMaxAttempts when set to a positive integer.
+	EnvAWSRetryMaxAttempts = "AWS_RETRY_MAX_ATTEMPTS"
+	// EnvAWSRetryMaximumAttempts overrides AWSRetryMaximumAttempts when set to a positive integer.
+	EnvAWSRetryMaximumAttempts = "AWS_RETRY_MAXIMUM_ATTEMPTS"
+	// EnvAWSRetryMaximumBackoff overrides AWSRetryMaximumBackoff when set to a Go duration string (e.g. "60s", "5m").
+	EnvAWSRetryMaximumBackoff = "AWS_RETRY_MAXIMUM_BACKOFF"
+
 	// InvalidRequestErrorMsg is the error message returned by S3 Compatible services when the authorization mechanism is not supported,
 	// which can be caused by using AWS Signature Version 2 for signing requests to AWS S3 regions that require AWS Signature Version 4.
 	InvalidRequestErrorMsg = "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256."
 )
+
+// retryMaxAttempts returns the configured retry max attempts, falling back to
+// AWSRetryMaxAttempts when the env var is unset, empty, or malformed.
+func retryMaxAttempts() int {
+	if v := os.Getenv(EnvAWSRetryMaxAttempts); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return AWSRetryMaxAttempts
+}
+
+// retryMaximumAttempts returns the configured retry maximum attempts, falling
+// back to AWSRetryMaximumAttempts when the env var is unset, empty, or
+// malformed.
+func retryMaximumAttempts() int {
+	if v := os.Getenv(EnvAWSRetryMaximumAttempts); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return AWSRetryMaximumAttempts
+}
+
+// retryMaximumBackoff returns the configured retry maximum backoff, falling
+// back to AWSRetryMaximumBackoff when the env var is unset, empty, or
+// malformed.
+func retryMaximumBackoff() time.Duration {
+	if v := os.Getenv(EnvAWSRetryMaximumBackoff); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return AWSRetryMaximumBackoff
+}
 
 func newService(u *url.URL) (*service, error) {
 	s := service{}
@@ -75,7 +118,7 @@ func (s *service) newInstance(ctx context.Context, retryBackoff bool) (*s3.Clien
 	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(s.Region),
-		config.WithRetryMaxAttempts(AWSRetryMaxAttempts),
+		config.WithRetryMaxAttempts(retryMaxAttempts()),
 		config.WithRequestChecksumCalculation(aws.RequestChecksumCalculationWhenRequired),
 		config.WithResponseChecksumValidation(aws.ResponseChecksumValidationWhenRequired),
 	)
@@ -107,8 +150,8 @@ func (s *service) newInstance(ctx context.Context, retryBackoff bool) (*s3.Clien
 		o.UsePathStyle = usePathStyle
 		if retryBackoff {
 			o.Retryer = retry.NewStandard(func(so *retry.StandardOptions) {
-				so.MaxAttempts = AWSRetryMaximumAttempts
-				so.MaxBackoff = AWSRetryMaximumBackoff
+				so.MaxAttempts = retryMaximumAttempts()
+				so.MaxBackoff = retryMaximumBackoff()
 			})
 		}
 		// Google Cloud Storage alters the `Accept-Encoding` header (GCS might changes the header on its way to GCS by appending gzip(gfe) as accepted encoding),
