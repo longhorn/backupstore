@@ -125,6 +125,40 @@ func (f *FileSystemOperator) List(path string) ([]string, error) {
 	return result, nil
 }
 
+// ListRecursive implements backupstore.RecursiveLister for filesystem-backed
+// drivers (nfs, cifs, vfs). It walks the local mount in a single process
+// instead of issuing a separate remote List() round-trip per directory
+// level, which matters for network filesystems where each List() is a
+// remote call.
+func (f *FileSystemOperator) ListRecursive(path string) ([]string, error) {
+	base := f.LocalPath(path)
+	var result []string
+
+	err := filepath.Walk(base, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Missing directory is not an error for callers, mirroring List()'s
+			// "No such file or directory" tolerance above.
+			if os.IsNotExist(err) {
+				return filepath.SkipDir
+			}
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(base, p)
+		if relErr != nil {
+			return relErr
+		}
+		result = append(result, rel)
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (f *FileSystemOperator) Upload(src, dst string) error {
 	tmpDst := dst + ".tmp" + "." + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 	if f.FileExists(tmpDst) {
