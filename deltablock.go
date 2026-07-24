@@ -1492,8 +1492,31 @@ func cleanupBlocks(driver BackupStoreDriver, blockMap map[string]*BlockInfo, vol
 }
 
 func getBlockNamesForVolume(driver BackupStoreDriver, volumeName string) ([]string, error) {
-	names := []string{}
 	blockPathBase := getBlockPath(volumeName)
+
+	// Prefer a single recursive listing when the driver supports it
+	// (e.g. S3-compatible backends). This avoids walking the two levels
+	// of sharded block directories with one List() call per directory,
+	// which can add up to 256*256 API requests for a single volume on
+	// backends that bill per request. See
+	// https://github.com/longhorn/longhorn/issues/1547
+	if recDriver, ok := driver.(RecursiveLister); ok {
+		paths, err := recDriver.ListRecursive(blockPathBase)
+		if err != nil {
+			// Directory doesn't exist
+			return []string{}, nil
+		}
+		// ListRecursive returns paths relative to blockPathBase, e.g.
+		// "aa/bb/<checksum>.blk". ExtractNames/ValidateName only accept
+		// bare file names, so strip the shard directory components first.
+		baseNames := make([]string, len(paths))
+		for i, p := range paths {
+			baseNames[i] = filepath.Base(p)
+		}
+		return util.ExtractNames(baseNames, "", BLK_SUFFIX), nil
+	}
+
+	names := []string{}
 	lv1Dirs, err := driver.List(blockPathBase)
 	// Directory doesn't exist
 	if err != nil {
