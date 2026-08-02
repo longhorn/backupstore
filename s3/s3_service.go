@@ -30,6 +30,10 @@ type service struct {
 	Client *http.Client
 }
 
+type objectDeleteAPI interface {
+	DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+}
+
 const (
 	VirtualHostedStyle = "VIRTUAL_HOSTED_STYLE"
 
@@ -359,4 +363,21 @@ func (s *service) DeleteObjects(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+func deleteObject(ctx context.Context, svc objectDeleteAPI, bucket, key string) error {
+	_, err := svc.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err == nil {
+		return nil
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchKey" {
+		return nil
+	}
+
+	return errors.Wrapf(parseAwsError(err), "failed to delete exact object %v", key)
 }

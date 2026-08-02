@@ -1457,24 +1457,42 @@ func DeleteDeltaBlockBackup(backupURL string) (err error) {
 }
 
 func cleanupBlocks(driver BackupStoreDriver, blockMap map[string]*BlockInfo, volume string) error {
-	var deletionFailures []string
 	activeBlockCount := int64(0)
 	deletedBlockCount := int64(0)
-	for _, blk := range blockMap {
-		if isBlockSafeToDelete(blk) {
-			if err := driver.Remove(blk.path); err != nil {
-				deletionFailures = append(deletionFailures, blk.checksum)
-				continue
-			}
-			log.Debugf("Deleted block %v for volume %v", blk.checksum, volume)
-			deletedBlockCount++
-		} else if isBlockReferenced(blk) && isBlockPresent(blk) {
-			activeBlockCount++
-		}
-	}
 
-	if len(deletionFailures) > 0 {
-		return fmt.Errorf("failed to delete backup blocks: %v", deletionFailures)
+	if remover, ok := driver.(ExactFileRemover); ok {
+		if err := RemoveExactFiles(remover, func(yield func(string) bool) {
+			for _, blk := range blockMap {
+				if isBlockSafeToDelete(blk) {
+					deletedBlockCount++
+					if !yield(blk.path) {
+						return
+					}
+				} else if isBlockReferenced(blk) && isBlockPresent(blk) {
+					activeBlockCount++
+				}
+			}
+		}); err != nil {
+			return errors.Wrap(err, "failed to delete backup blocks")
+		}
+	} else {
+		var deletionFailures []string
+		for _, blk := range blockMap {
+			if isBlockSafeToDelete(blk) {
+				if err := driver.Remove(blk.path); err != nil {
+					deletionFailures = append(deletionFailures, blk.checksum)
+					continue
+				}
+				log.Debugf("Deleted block %v for volume %v", blk.checksum, volume)
+				deletedBlockCount++
+			} else if isBlockReferenced(blk) && isBlockPresent(blk) {
+				activeBlockCount++
+			}
+		}
+
+		if len(deletionFailures) > 0 {
+			return fmt.Errorf("failed to delete backup blocks: %v", deletionFailures)
+		}
 	}
 
 	log.Infof("Retained %v blocks for volume %v", activeBlockCount, volume)
