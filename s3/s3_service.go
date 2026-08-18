@@ -160,6 +160,11 @@ func (s *service) newInstance(ctx context.Context, retryBackoff bool) (*s3.Clien
 				so.MaxAttempts = retryMaximumAttempts()
 				so.MaxBackoff = retryMaximumBackoff()
 			})
+			// NewFromConfig runs finalizeRetryMaxAttempts after this callback, which
+			// wraps the retryer above in retry.AddWithMaxAttempts(o.RetryMaxAttempts)
+			// and would cap it at AWS_RETRY_MAX_ATTEMPTS. Clear it so the retryer's
+			// own AWS_RETRY_MAXIMUM_ATTEMPTS stays effective.
+			o.RetryMaxAttempts = 0
 		}
 		// Google Cloud Storage alters the `Accept-Encoding` header (GCS might changes the header on its way to GCS by appending gzip(gfe) as accepted encoding),
 		// which causing signature mismatches and breaks the v2 request signature verification.

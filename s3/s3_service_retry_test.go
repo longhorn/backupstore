@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -67,5 +68,37 @@ func TestRetryMaximumBackoff_EnvOverride(t *testing.T) {
 				t.Fatalf("retryMaximumBackoff() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// The env-parsing tests above pass whether or not the retryer is actually wired
+// into the SDK, so assert the effective value on the constructed client.
+// s3.NewFromConfig runs finalizeRetryMaxAttempts after the option callback and
+// caps a custom retryer with o.RetryMaxAttempts, which would silently limit
+// AWS_RETRY_MAXIMUM_ATTEMPTS to AWS_RETRY_MAX_ATTEMPTS.
+func TestRetryMaximumAttempts_AppliedToClient(t *testing.T) {
+	t.Setenv(EnvAWSRetryMaxAttempts, "5")
+	t.Setenv(EnvAWSRetryMaximumAttempts, "20")
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "test")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+
+	s := &service{Region: "us-east-1"}
+
+	client, err := s.newInstance(context.Background(), true)
+	if err != nil {
+		t.Fatalf("newInstance() error = %v", err)
+	}
+	if got := client.Options().Retryer.MaxAttempts(); got != 20 {
+		t.Errorf("with retry backoff, Retryer.MaxAttempts() = %d, want 20", got)
+	}
+
+	// Without the custom retryer, AWS_RETRY_MAX_ATTEMPTS still governs.
+	client, err = s.newInstance(context.Background(), false)
+	if err != nil {
+		t.Fatalf("newInstance() error = %v", err)
+	}
+	if got := client.Options().Retryer.MaxAttempts(); got != 5 {
+		t.Errorf("without retry backoff, Retryer.MaxAttempts() = %d, want 5", got)
 	}
 }
