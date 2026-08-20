@@ -139,6 +139,12 @@ func CreateDeltaBlockBackup(backupName string, config *DeltaBackupConfig) (isInc
 	volume := config.Volume
 	snapshot := config.Snapshot
 	destURL := config.DestURL
+	if volume == nil {
+		return false, fmt.Errorf("BUG: missing volume for backup")
+	}
+	if snapshot == nil {
+		return false, fmt.Errorf("BUG: missing snapshot for backup")
+	}
 	createLog = createLog.WithFields(logrus.Fields{
 		LogFieldVolume:   volume,
 		LogFieldSnapshot: snapshot,
@@ -187,10 +193,13 @@ func CreateDeltaBlockBackup(backupName string, config *DeltaBackupConfig) (isInc
 	}
 
 	// Update volume from backupstore
-	volume, err = loadVolume(bsDriver, volume.Name)
+	// Avoid overwriting the outer `volume` with a nil result on error, otherwise
+	// the deferred UpdateBackupStatus (which dereferences volume.Name) panics.
+	updatedVolume, err := loadVolume(bsDriver, volume.Name)
 	if err != nil {
 		return false, err
 	}
+	volume = updatedVolume
 
 	config.Volume.CompressionMethod = volume.CompressionMethod
 	config.Volume.DataEngine = volume.DataEngine
