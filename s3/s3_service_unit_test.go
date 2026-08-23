@@ -19,6 +19,23 @@ type recordedRequest struct {
 	method string
 	path   string
 	query  string
+	// authorization is the raw SigV4 Authorization header, which carries the
+	// SignedHeaders list the request was signed over.
+	authorization string
+	// acceptEncoding is the `Accept-Encoding` value as it arrived on the wire.
+	acceptEncoding string
+}
+
+// signedHeaders returns the SignedHeaders list from the SigV4 Authorization
+// header, e.g. "host;x-amz-content-sha256;x-amz-date".
+func (r recordedRequest) signedHeaders() string {
+	for _, part := range strings.Split(r.authorization, " ") {
+		part = strings.TrimSuffix(strings.TrimSpace(part), ",")
+		if after, ok := strings.CutPrefix(part, "SignedHeaders="); ok {
+			return after
+		}
+	}
+	return ""
 }
 
 // fakeS3Server fakes just enough of the S3 API (PutObject,
@@ -49,9 +66,11 @@ func (f *fakeS3Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.Lock()
 	f.requests = append(f.requests, recordedRequest{
-		method: r.Method,
-		path:   r.URL.Path,
-		query:  r.URL.RawQuery,
+		method:         r.Method,
+		path:           r.URL.Path,
+		query:          r.URL.RawQuery,
+		authorization:  r.Header.Get("Authorization"),
+		acceptEncoding: r.Header.Get("Accept-Encoding"),
 	})
 	f.mu.Unlock()
 
