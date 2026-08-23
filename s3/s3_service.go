@@ -23,6 +23,7 @@ import (
 
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	bhttp "github.com/longhorn/backupstore/http"
+	btypes "github.com/longhorn/backupstore/types"
 )
 
 type service struct {
@@ -42,11 +43,11 @@ const (
 	AWSRetryMaximumBackoff = 300 * time.Second
 
 	// EnvAWSRetryMaxAttempts overrides AWSRetryMaxAttempts when set to a positive integer.
-	EnvAWSRetryMaxAttempts = "AWS_RETRY_MAX_ATTEMPTS"
+	EnvAWSRetryMaxAttempts = btypes.AWSRetryMaxAttempts
 	// EnvAWSRetryMaximumAttempts overrides AWSRetryMaximumAttempts when set to a positive integer.
-	EnvAWSRetryMaximumAttempts = "AWS_RETRY_MAXIMUM_ATTEMPTS"
+	EnvAWSRetryMaximumAttempts = btypes.AWSRetryMaximumAttempts
 	// EnvAWSRetryMaximumBackoff overrides AWSRetryMaximumBackoff when set to a Go duration string (e.g. "60s", "5m").
-	EnvAWSRetryMaximumBackoff = "AWS_RETRY_MAXIMUM_BACKOFF"
+	EnvAWSRetryMaximumBackoff = btypes.AWSRetryMaximumBackoff
 
 	// InvalidRequestErrorMsg is the error message returned by S3 Compatible services when the authorization mechanism is not supported,
 	// which can be caused by using AWS Signature Version 2 for signing requests to AWS S3 regions that require AWS Signature Version 4.
