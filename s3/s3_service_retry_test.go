@@ -42,7 +42,7 @@ func TestRetryMaximumAttempts_EnvOverride(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(EnvAWSRetryMaximumAttempts, tc.env)
-			if got := retryMaximumAttempts(); got != tc.want {
+			if got, _ := retryMaximumAttempts(); got != tc.want {
 				t.Fatalf("retryMaximumAttempts() = %d, want %d", got, tc.want)
 			}
 		})
@@ -100,5 +100,45 @@ func TestRetryMaximumAttempts_AppliedToClient(t *testing.T) {
 	}
 	if got := client.Options().Retryer.MaxAttempts(); got != 5 {
 		t.Errorf("without retry backoff, Retryer.MaxAttempts() = %d, want 5", got)
+	}
+}
+
+// Leaving AWS_RETRY_MAXIMUM_ATTEMPTS unset must not change the effective number
+// of attempts. The custom retryer has always been wrapped by
+// finalizeRetryMaxAttempts with AWS_RETRY_MAX_ATTEMPTS, so lifting that cap
+// unconditionally would silently double the default from 5 to 10.
+func TestRetryMaximumAttempts_DefaultIsUnchanged(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "test")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+	t.Setenv(EnvAWSRetryMaxAttempts, "")
+	t.Setenv(EnvAWSRetryMaximumAttempts, "")
+
+	s := &service{Region: "us-east-1"}
+
+	client, err := s.newInstance(context.Background(), true)
+	if err != nil {
+		t.Fatalf("newInstance() error = %v", err)
+	}
+	if got := client.Options().Retryer.MaxAttempts(); got != AWSRetryMaxAttempts {
+		t.Errorf("with no overrides, Retryer.MaxAttempts() = %d, want %d", got, AWSRetryMaxAttempts)
+	}
+}
+
+// A malformed override is not an override, so the cap must stay in place.
+func TestRetryMaximumAttempts_MalformedOverrideKeepsCap(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-east-1")
+	t.Setenv("AWS_ACCESS_KEY_ID", "test")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+	t.Setenv(EnvAWSRetryMaximumAttempts, "not-a-number")
+
+	s := &service{Region: "us-east-1"}
+
+	client, err := s.newInstance(context.Background(), true)
+	if err != nil {
+		t.Fatalf("newInstance() error = %v", err)
+	}
+	if got := client.Options().Retryer.MaxAttempts(); got != AWSRetryMaxAttempts {
+		t.Errorf("with a malformed override, Retryer.MaxAttempts() = %d, want %d", got, AWSRetryMaxAttempts)
 	}
 }

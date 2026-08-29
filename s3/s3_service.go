@@ -78,16 +78,16 @@ func retryMaxAttempts() int {
 	return AWSRetryMaxAttempts
 }
 
-// retryMaximumAttempts returns the configured retry maximum attempts, falling
-// back to AWSRetryMaximumAttempts when the env var is unset, empty, or
-// malformed.
-func retryMaximumAttempts() int {
+// retryMaximumAttempts returns the configured retry maximum attempts and
+// whether it came from a valid override, falling back to
+// AWSRetryMaximumAttempts when the env var is unset, empty, or malformed.
+func retryMaximumAttempts() (int, bool) {
 	if v := os.Getenv(EnvAWSRetryMaximumAttempts); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
+			return n, true
 		}
 	}
-	return AWSRetryMaximumAttempts
+	return AWSRetryMaximumAttempts, false
 }
 
 // retryMaximumBackoff returns the configured retry maximum backoff, falling
@@ -208,15 +208,19 @@ func (s *service) newInstance(ctx context.Context, retryBackoff bool) (*s3.Clien
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = usePathStyle
 		if retryBackoff {
+			maximumAttempts, isOverridden := retryMaximumAttempts()
 			o.Retryer = retry.NewStandard(func(so *retry.StandardOptions) {
-				so.MaxAttempts = retryMaximumAttempts()
+				so.MaxAttempts = maximumAttempts
 				so.MaxBackoff = retryMaximumBackoff()
 			})
 			// NewFromConfig runs finalizeRetryMaxAttempts after this callback, which
 			// wraps the retryer above in retry.AddWithMaxAttempts(o.RetryMaxAttempts)
-			// and would cap it at AWS_RETRY_MAX_ATTEMPTS. Clear it so the retryer's
-			// own AWS_RETRY_MAXIMUM_ATTEMPTS stays effective.
-			o.RetryMaxAttempts = 0
+			// and caps it at AWS_RETRY_MAX_ATTEMPTS. Lift that cap only when the
+			// user asked for a specific maximum, so leaving the variable unset keeps
+			// the effective attempts it has always had.
+			if isOverridden {
+				o.RetryMaxAttempts = 0
+			}
 		}
 		// Remove `Accept-Encoding` from SignedHeaders for endpoints that alter it in
 		// transit. ignoreSigningHeaders restores the header after signing, so the
