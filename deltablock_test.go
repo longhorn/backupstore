@@ -1,8 +1,11 @@
 package backupstore
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -634,4 +637,174 @@ func TestCreateDeltaBlockBackupReportsLoadVolumeFailure(t *testing.T) {
 	assert.Equal(deltaVolumeName, lastStatus.volumeName)
 	assert.Equal(deltaSnapshotName, lastStatus.snapshotName)
 	assert.Equal(string(types.ProgressStateError), lastStatus.state)
+}
+
+// restoreStatus records one UpdateRestoreStatus call.
+type restoreStatus struct {
+	progress int
+	err      error
+}
+
+// isTerminalRestoreStatus mirrors how the engines read a status: an error, or
+// PROGRESS_PERCENTAGE_BACKUP_TOTAL, ends the restore. Everything else is per-block progress.
+func isTerminalRestoreStatus(restoreProgress int, err error) bool {
+	return err != nil || restoreProgress == PROGRESS_PERCENTAGE_BACKUP_TOTAL
+}
+
+// mockRestoreOps restores into a regular file and lets a test inject a failure into
+// CloseVolumeDev, which is where the volume engine flushes the restored data to the device.
+type mockRestoreOps struct {
+	mutex sync.Mutex
+
+	// injected inputs
+	closeErr error
+
+	// recorded calls
+	closeCount int
+
+	// terminalStatus holds the first status for which isTerminalRestoreStatus is true. The
+	// restore goroutine reports it after CloseVolumeDev. When the restore fails early, workers
+	// that are still finishing may report per-block progress after it, so the last recorded
+	// status cannot be used.
+	terminalStatus         restoreStatus
+	terminalStatusReported chan struct{}
+
+	stopChan chan struct{}
+}
+
+var _ DeltaRestoreOperations = new(mockRestoreOps)
+
+func newMockRestoreOps() *mockRestoreOps {
+	return &mockRestoreOps{
+		terminalStatusReported: make(chan struct{}),
+		stopChan:               make(chan struct{}),
+	}
+}
+
+func (ops *mockRestoreOps) OpenVolumeDev(volDevName string) (*os.File, string, error) {
+	volDev, err := os.Create(volDevName)
+	return volDev, volDevName, err
+}
+
+func (ops *mockRestoreOps) CloseVolumeDev(volDev *os.File) error {
+	ops.mutex.Lock()
+	ops.closeCount++
+	ops.mutex.Unlock()
+
+	if err := volDev.Close(); err != nil {
+		return err
+	}
+	return ops.closeErr
+}
+
+func (ops *mockRestoreOps) UpdateRestoreStatus(snapshot string, restoreProgress int, err error) {
+	if !isTerminalRestoreStatus(restoreProgress, err) {
+		return
+	}
+
+	ops.mutex.Lock()
+	defer ops.mutex.Unlock()
+
+	select {
+	case <-ops.terminalStatusReported:
+		return
+	default:
+	}
+	ops.terminalStatus = restoreStatus{progress: restoreProgress, err: err}
+	close(ops.terminalStatusReported)
+}
+
+func (ops *mockRestoreOps) Stop() {
+	close(ops.stopChan)
+}
+
+func (ops *mockRestoreOps) GetStopChan() chan struct{} {
+	return ops.stopChan
+}
+
+func (ops *mockRestoreOps) getCloseCount() int {
+	ops.mutex.Lock()
+	defer ops.mutex.Unlock()
+	return ops.closeCount
+}
+
+// waitForTerminalStatus blocks until the restore goroutine reports a status the engines treat as
+// terminal and returns it.
+func (ops *mockRestoreOps) waitForTerminalStatus(t *testing.T) restoreStatus {
+	t.Helper()
+
+	select {
+	case <-ops.terminalStatusReported:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for the restore goroutine to report a terminal status")
+	}
+
+	ops.mutex.Lock()
+	defer ops.mutex.Unlock()
+	return ops.terminalStatus
+}
+
+// seedFullBackup runs a full backup through the mock driver and returns its backup URL, so that
+// a restore test has real block files to read back.
+func seedFullBackup(t *testing.T, backupName string) string {
+	t.Helper()
+
+	ops := newMockDeltaOps()
+	if _, err := CreateDeltaBlockBackup(backupName, newDeltaBackupConfig(ops)); err != nil {
+		t.Fatalf("failed to seed backup %v: %v", backupName, err)
+	}
+	ops.waitForSnapshotClosed(t)
+
+	lastStatus := ops.getLastStatus(t)
+	if lastStatus.errMessage != "" {
+		t.Fatalf("failed to seed backup %v: %v", backupName, lastStatus.errMessage)
+	}
+	return lastStatus.url
+}
+
+func newDeltaRestoreConfig(t *testing.T, backupURL string, ops *mockRestoreOps) *DeltaRestoreConfig {
+	t.Helper()
+
+	return &DeltaRestoreConfig{
+		BackupURL:       backupURL,
+		DeltaOps:        ops,
+		Filename:        filepath.Join(t.TempDir(), "restore.img"),
+		ConcurrentLimit: 1,
+	}
+}
+
+func TestRestoreDeltaBlockBackupReportsCompletion(t *testing.T) {
+	assert := assert.New(t)
+
+	newDeltaMockStoreDriver(t)
+	backupURL := seedFullBackup(t, "backup-1")
+
+	ops := newMockRestoreOps()
+	err := RestoreDeltaBlockBackup(context.Background(), newDeltaRestoreConfig(t, backupURL, ops))
+	assert.NoError(err)
+
+	finalStatus := ops.waitForTerminalStatus(t)
+	assert.Equal(PROGRESS_PERCENTAGE_BACKUP_TOTAL, finalStatus.progress)
+	assert.NoError(finalStatus.err)
+	assert.Equal(1, ops.getCloseCount())
+}
+
+func TestRestoreDeltaBlockBackupReportsCloseVolumeDevFailure(t *testing.T) {
+	assert := assert.New(t)
+
+	newDeltaMockStoreDriver(t)
+	backupURL := seedFullBackup(t, "backup-1")
+
+	ops := newMockRestoreOps()
+	ops.closeErr = errors.New("sync failed: input/output error")
+	err := RestoreDeltaBlockBackup(context.Background(), newDeltaRestoreConfig(t, backupURL, ops))
+	assert.NoError(err)
+
+	// Every block was written, but the flush at close failed and the data may not have reached the
+	// device. The restore must be reported as failed, and progress must stay below
+	// PROGRESS_PERCENTAGE_BACKUP_TOTAL because the engines read that value as success.
+	finalStatus := ops.waitForTerminalStatus(t)
+	assert.Equal(PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT, finalStatus.progress)
+	assert.ErrorIs(finalStatus.err, ops.closeErr)
+	assert.Contains(finalStatus.err.Error(), "failed to close volume device")
 }
