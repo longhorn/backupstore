@@ -1,4 +1,4 @@
-package common
+package backupstore
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func TestMergeErrorChannelsRelaysWorkerError(t *testing.T) {
 	failed <- workerErr
 	running := make(chan error, 1)
 
-	merged := MergeErrorChannels(context.Background(), failed, running)
+	merged := mergeErrorChannels(context.Background(), failed, running)
 
 	err, ok := receiveWithTimeout(t, merged)
 	assert.True(ok)
@@ -46,13 +46,12 @@ func TestMergeErrorChannelsReportsContextCancellation(t *testing.T) {
 
 	// The merger may observe ctx.Done() before the worker's own error arrives. It must send the
 	// cancellation to the output rather than just return, because once every goroutine returns
-	// the output is closed and the caller reads nil, which it would report as a successful backup
-	// or restore. The backing image backupMappings worker exits on ctx.Done() without sending at
-	// all, so this is the only signal its caller gets.
+	// the output is closed and the caller reads nil, which it would report as a successful
+	// restore.
 	running := make(chan error, 1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	merged := MergeErrorChannels(ctx, running)
+	merged := mergeErrorChannels(ctx, running)
 	cancel()
 
 	err, ok := receiveWithTimeout(t, merged)
@@ -67,14 +66,14 @@ func TestMergeErrorChannelsReportsCancellationWhenInputAlreadyClosed(t *testing.
 	assert := assert.New(t)
 
 	// When ctx is cancelled and an input is already closed, both select cases are ready and
-	// either may win. A worker that exits on ctx.Done() without sending, such as backupMappings,
-	// leaves only a closed channel behind, so the merger must still report the cancellation.
+	// either may win. A worker that exits on ctx.Done() without sending leaves only a closed
+	// channel behind, so the merger must still report the cancellation.
 	closed := make(chan error)
 	close(closed)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	merged := MergeErrorChannels(ctx, closed)
+	merged := mergeErrorChannels(ctx, closed)
 
 	err, ok := receiveWithTimeout(t, merged)
 	assert.True(ok)
@@ -89,29 +88,9 @@ func TestMergeErrorChannelsClosesWhenAllInputsClose(t *testing.T) {
 	close(first)
 	close(second)
 
-	merged := MergeErrorChannels(context.Background(), first, second)
+	merged := mergeErrorChannels(context.Background(), first, second)
 
 	err, ok := receiveWithTimeout(t, merged)
 	assert.False(ok, "merged channel should close without a value")
 	assert.NoError(err)
-}
-
-func TestGetProgress(t *testing.T) {
-	assert := assert.New(t)
-
-	// Per-block progress must never decrease and must end exactly at ProgressPercentageBackup. The
-	// engines treat ProgressPercentageBackupTotal as the terminal state, so only the final status
-	// update may report it.
-	for _, totalBlocks := range []int64{1, 2, 16, 19, 20, 1000} {
-		assert.Equal(0, GetProgress(totalBlocks, 0), "totalBlocks=%d", totalBlocks)
-		assert.Equal(ProgressPercentageBackup, GetProgress(totalBlocks, totalBlocks), "totalBlocks=%d", totalBlocks)
-
-		previous := 0
-		for processedBlocks := int64(1); processedBlocks <= totalBlocks; processedBlocks++ {
-			current := GetProgress(totalBlocks, processedBlocks)
-			assert.GreaterOrEqual(current, previous, "totalBlocks=%d processedBlocks=%d", totalBlocks, processedBlocks)
-			assert.LessOrEqual(current, ProgressPercentageBackup, "totalBlocks=%d processedBlocks=%d", totalBlocks, processedBlocks)
-			previous = current
-		}
-	}
 }

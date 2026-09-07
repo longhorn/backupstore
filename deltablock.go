@@ -767,6 +767,23 @@ func closeRestoreVolumeDev(deltaOps DeltaRestoreOperations, volDev *os.File, vol
 	return errors.Wrapf(closeErr, "failed to close volume device %v", volDevName)
 }
 
+// wrapContextErrorAsRestoreCancelled returns err wrapped with the types.ErrorMsgRestoreCancelled
+// message when err is a context error, either context.Canceled or context.DeadlineExceeded. Any
+// other error is returned unchanged.
+//
+// The engines match on that message to record the restore as cancelled instead of failed, so
+// that it is restarted later. A cancellation reaches the caller in one of three shapes: this
+// message from a worker that saw ctx.Done(), a ctx error wrapped by a worker's block read, or the
+// bare ctx.Err() relayed by mergeErrorChannels. Normalizing here gives the engines the same
+// message in every case. The message names no cause; the wrapped ctx error already says whether
+// the ctx was cancelled or its deadline passed.
+func wrapContextErrorAsRestoreCancelled(err error, volumeName string) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return errors.Wrapf(err, types.ErrorMsgRestoreCancelled+" for volume %v", volumeName)
+	}
+	return err
+}
+
 // RestoreDeltaBlockBackup restores a delta block backup for the given configuration
 func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (err error) {
 	restoreLog := log
@@ -916,7 +933,7 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (e
 		}
 
 		mergedErrChan := mergeErrorChannels(ctx, errorChans...)
-		err = <-mergedErrChan
+		err = wrapContextErrorAsRestoreCancelled(<-mergedErrChan, srcVolumeName)
 		if err != nil {
 			progressReached = progress.currentProgress()
 			restoreLog.WithError(err).Errorf("Failed to delta restore volume %v backup %v", srcVolumeName, backup.Name)
@@ -1269,7 +1286,7 @@ func performIncrementalRestore(ctx context.Context, bsDriver BackupStoreDriver, 
 	}
 
 	mergedErrChan := mergeErrorChannels(ctx, errorChans...)
-	err = <-mergedErrChan
+	err = wrapContextErrorAsRestoreCancelled(<-mergedErrChan, srcVolumeName)
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to incrementally restore volume %v backup %v", srcVolumeName, backup.Name)
 	}
