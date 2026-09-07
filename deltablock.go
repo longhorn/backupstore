@@ -711,6 +711,45 @@ func mergeSnapshotMap(deltaBackup, lastBackup *Backup) *Backup {
 	return backup
 }
 
+// finishRestore closes the volume device, reports the final restore status, and releases the
+// lock. progressReached is the per-block progress when the restore stopped. It is replaced by
+// PROGRESS_PERCENTAGE_BACKUP_TOTAL only when both the restore and the close succeeded, because
+// the engines treat that value as success regardless of the error field.
+func finishRestore(deltaOps DeltaRestoreOperations, volDev *os.File, volDevName string, restoreLog logrus.FieldLogger, lock *FileLock, progressReached int, restoreErr error) {
+	err := closeRestoreVolumeDev(deltaOps, volDev, volDevName, restoreLog, restoreErr)
+	if err == nil {
+		progressReached = PROGRESS_PERCENTAGE_BACKUP_TOTAL
+	}
+	deltaOps.UpdateRestoreStatus(volDevName, progressReached, err)
+	if unlockErr := lock.Unlock(); unlockErr != nil {
+		restoreLog.WithError(unlockErr).Warn("Failed to unlock")
+	}
+}
+
+// closeRestoreVolumeDev closes the volume device and returns the error to report for the restore.
+//
+// The restoreBlocks goroutines write through their own file descriptors and discard their close
+// errors, so CloseVolumeDev is the only call that reports whether the restored data was flushed
+// to the device. The returned error is chosen as follows:
+//   - Close succeeded: the restore error, which is nil when the restore succeeded.
+//   - Close failed and the restore already failed: the restore error, because it is the earlier
+//     failure. The close error is only logged.
+//   - Close failed and the restore succeeded: the close error, so that the restore is reported
+//     as failed instead of complete.
+func closeRestoreVolumeDev(deltaOps DeltaRestoreOperations, volDev *os.File, volDevName string, restoreLog logrus.FieldLogger, restoreErr error) error {
+	closeErr := deltaOps.CloseVolumeDev(volDev)
+	if closeErr == nil {
+		return restoreErr
+	}
+
+	if restoreErr != nil {
+		restoreLog.WithError(closeErr).Warnf("Failed to close volume device %v after the restore failed", volDevName)
+		return restoreErr
+	}
+	restoreLog.WithError(closeErr).Errorf("Failed to close volume device %v, failing the restore because the flush of the restored data could not be confirmed", volDevName)
+	return errors.Wrapf(closeErr, "failed to close volume device %v", volDevName)
+}
+
 // RestoreDeltaBlockBackup restores a delta block backup for the given configuration
 func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (err error) {
 	restoreLog := log
@@ -827,17 +866,12 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (e
 
 	go func(ctx context.Context) {
 		var err error
-		currentProgress := 0
+		progressReached := 0
 
+		// The closure is required so that err and progressReached are read when the goroutine
+		// exits, not when the defer is registered.
 		defer func() {
-			if _err := deltaOps.CloseVolumeDev(volDev); _err != nil {
-				restoreLog.WithError(_err).Warnf("Failed to close volume device %v", volDevName)
-			}
-
-			deltaOps.UpdateRestoreStatus(volDevName, currentProgress, err)
-			if unlockErr := lock.Unlock(); unlockErr != nil {
-				restoreLog.WithError(unlockErr).Warn("Failed to unlock")
-			}
+			finishRestore(deltaOps, volDev, volDevName, restoreLog, lock, progressReached, err)
 		}()
 
 		progress := &progress{
@@ -867,11 +901,12 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (e
 		mergedErrChan := mergeErrorChannels(ctx, errorChans...)
 		err = <-mergedErrChan
 		if err != nil {
-			currentProgress = progress.progress
+			progressReached = progress.progress
 			restoreLog.WithError(err).Errorf("Failed to delta restore volume %v backup %v", srcVolumeName, backup.Name)
 			return
 		}
-		currentProgress = PROGRESS_PERCENTAGE_BACKUP_TOTAL
+		// All blocks are written. The deferred close decides whether to report completion.
+		progressReached = PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT
 	}(ctx)
 
 	return nil
@@ -1024,18 +1059,12 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 	}
 	go func() {
 		var err error
-		finalProgress := 0
+		progressReached := 0
 
+		// The closure is required so that err and progressReached are read when the goroutine
+		// exits, not when the defer is registered.
 		defer func() {
-			if _err := deltaOps.CloseVolumeDev(volDev); _err != nil {
-				restoreLog.WithError(_err).Warnf("Failed to close volume device %v", volDevName)
-			}
-
-			deltaOps.UpdateRestoreStatus(volDevName, finalProgress, err)
-
-			if unlockErr := lock.Unlock(); unlockErr != nil {
-				restoreLog.WithError(unlockErr).Warn("Failed to unlock")
-			}
+			finishRestore(deltaOps, volDev, volDevName, restoreLog, lock, progressReached, err)
 		}()
 
 		// This pre-truncate is to ensure the XFS speculatively
@@ -1056,7 +1085,8 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 			return
 		}
 
-		finalProgress = PROGRESS_PERCENTAGE_BACKUP_TOTAL
+		// All blocks are written. The deferred close decides whether to report completion.
+		progressReached = PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT
 	}()
 	return nil
 }
