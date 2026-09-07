@@ -808,3 +808,23 @@ func TestRestoreDeltaBlockBackupReportsCloseVolumeDevFailure(t *testing.T) {
 	assert.ErrorIs(finalStatus.err, ops.closeErr)
 	assert.Contains(finalStatus.err.Error(), "failed to close volume device")
 }
+
+func TestGetProgress(t *testing.T) {
+	assert := assert.New(t)
+
+	// Per-block progress must never decrease and must end exactly at PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT.
+	// The engines treat PROGRESS_PERCENTAGE_BACKUP_TOTAL as the terminal state, so only the final
+	// status update may report it.
+	for _, totalBlocks := range []int64{1, 2, 16, 19, 20, 1000} {
+		assert.Equal(0, getProgress(totalBlocks, 0), "totalBlocks=%d", totalBlocks)
+		assert.Equal(PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT, getProgress(totalBlocks, totalBlocks), "totalBlocks=%d", totalBlocks)
+
+		previous := 0
+		for processedBlocks := int64(1); processedBlocks <= totalBlocks; processedBlocks++ {
+			current := getProgress(totalBlocks, processedBlocks)
+			assert.GreaterOrEqual(current, previous, "totalBlocks=%d processedBlocks=%d", totalBlocks, processedBlocks)
+			assert.LessOrEqual(current, PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT, "totalBlocks=%d processedBlocks=%d", totalBlocks, processedBlocks)
+			previous = current
+		}
+	}
+}
