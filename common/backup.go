@@ -137,8 +137,17 @@ func MergeErrorChannels(ctx context.Context, channels ...<-chan error) <-chan er
 	return out
 }
 
-func GetProgress(total, processed int64) int {
-	return int((float64(processed+1) / float64(total)) * ProgressPercentageBackup)
+// GetProgress returns the progress percentage to report after processedBlocks of totalBlocks
+// have been backed up or restored.
+//
+// processedBlocks is a count that includes the block that just finished, not a zero-based index,
+// so the last block yields exactly ProgressPercentageBackup.
+//
+// Values above ProgressPercentageBackup up to ProgressPercentageBackupTotal are reserved for the
+// final status update, which runs after the metadata is saved or the backing image file is closed.
+// Per-block progress must never report completion.
+func GetProgress(totalBlocks, processedBlocks int64) int {
+	return int((float64(processedBlocks) / float64(totalBlocks)) * ProgressPercentageBackup)
 }
 
 func SortBackupBlocks(blocks []BlockMapping, size, blockSize int64) []BlockMapping {
