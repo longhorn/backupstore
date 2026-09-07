@@ -106,6 +106,14 @@ type progress struct {
 	progress int
 }
 
+// currentProgress returns the last computed progress percentage under the lock. Use it after the
+// first worker error returns, because the remaining workers may still be updating the counters.
+func (p *progress) currentProgress() int {
+	p.Lock()
+	defer p.Unlock()
+	return p.progress
+}
+
 type DeltaBlockBackupOperations interface {
 	HasSnapshot(id, volumeID string) bool
 	CompareSnapshot(id, compareID, volumeID string, blockSize int64) (*types.Mappings, error)
@@ -620,7 +628,7 @@ func performBackup(bsDriver BackupStoreDriver, config *DeltaBackupConfig, delta 
 
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to backup volume %v snapshot %v", volume.Name, snapshot.Name)
-		return progress.progress, "", err
+		return progress.currentProgress(), "", err
 	}
 
 	log.WithFields(logrus.Fields{
@@ -910,7 +918,7 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (e
 		mergedErrChan := mergeErrorChannels(ctx, errorChans...)
 		err = <-mergedErrChan
 		if err != nil {
-			progressReached = progress.progress
+			progressReached = progress.currentProgress()
 			restoreLog.WithError(err).Errorf("Failed to delta restore volume %v backup %v", srcVolumeName, backup.Name)
 			return
 		}
