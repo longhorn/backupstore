@@ -338,8 +338,17 @@ func populateMappings(delta *types.Mappings) (<-chan types.Mapping, <-chan error
 	return mappingChan, errChan
 }
 
-func getProgress(total, processed int64) int {
-	return int((float64(processed+1) / float64(total)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
+// getProgress returns the progress percentage to report after processedBlocks of totalBlocks
+// have been backed up or restored.
+//
+// processedBlocks is a count that includes the block that just finished, not a zero-based index,
+// so the last block yields exactly PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT.
+//
+// Values above PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT up to PROGRESS_PERCENTAGE_BACKUP_TOTAL are
+// reserved for the final status update, which runs after the metadata is saved or the volume
+// device is closed. Per-block progress must never report completion.
+func getProgress(totalBlocks, processedBlocks int64) int {
+	return int((float64(processedBlocks) / float64(totalBlocks)) * PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT)
 }
 
 func isBlockBeingProcessed(deltaBackup *Backup, offset int64, checksum string) bool {
