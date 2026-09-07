@@ -809,6 +809,48 @@ func TestRestoreDeltaBlockBackupReportsCloseVolumeDevFailure(t *testing.T) {
 	assert.Contains(finalStatus.err.Error(), "failed to close volume device")
 }
 
+func TestRestoreDeltaBlockBackupReportsCancellation(t *testing.T) {
+	// A ctx ends in one of two ways, and the engines must see the same cancellation message for
+	// both.
+	testCases := map[string]func(t *testing.T) context.Context{
+		"canceled": func(t *testing.T) context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		},
+		"deadline exceeded": func(t *testing.T) context.Context {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now())
+			t.Cleanup(cancel)
+			return ctx
+		},
+	}
+
+	for testName, newEndedContext := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			assert := assert.New(t)
+
+			newDeltaMockStoreDriver(t)
+			backupURL := seedFullBackup(t, "backup-1")
+
+			// End the ctx before the restore goroutine starts so that it is the first thing the
+			// goroutine sees. Whether a worker or the error channel merger observes ctx.Done() first
+			// is not deterministic, so the outcome must be the same either way.
+			ctx := newEndedContext(t)
+
+			ops := newMockRestoreOps()
+			err := RestoreDeltaBlockBackup(ctx, newDeltaRestoreConfig(t, backupURL, ops))
+			assert.NoError(err)
+
+			// The engines distinguish a cancelled restore, which they restart later, from a failed
+			// one by this message prefix. Progress must stay below PROGRESS_PERCENTAGE_BACKUP_TOTAL.
+			finalStatus := ops.waitForTerminalStatus(t)
+			assert.Error(finalStatus.err)
+			assert.Contains(finalStatus.err.Error(), types.ErrorMsgRestoreCancelled)
+			assert.Less(finalStatus.progress, PROGRESS_PERCENTAGE_BACKUP_TOTAL)
+		})
+	}
+}
+
 func TestGetProgress(t *testing.T) {
 	assert := assert.New(t)
 
