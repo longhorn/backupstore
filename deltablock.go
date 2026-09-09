@@ -908,6 +908,12 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (e
 			finishRestore(deltaOps, volDev, volDevName, restoreLog, lock, progressReached, err)
 		}()
 
+		// The restore ends with the first error or completion below. Cancel ctx so
+		// the goroutines still feeding and writing blocks exit, without relying on
+		// the caller to cancel. Runs before the finishRestore defer above.
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
 		progress := &progress{
 			totalBlockCounts: int64(len(backup.Blocks)),
 		}
@@ -925,7 +931,7 @@ func RestoreDeltaBlockBackup(ctx context.Context, config *DeltaRestoreConfig) (e
 			}
 		}
 
-		blockChan, errChan := populateBlocksForFullRestore(bsDriver, backup)
+		blockChan, errChan := populateBlocksForFullRestore(ctx, bsDriver, backup)
 
 		errorChans := []<-chan error{errChan}
 		for i := 0; i < int(concurrentLimit); i++ {
@@ -1125,7 +1131,19 @@ func RestoreDeltaBlockBackupIncrementally(ctx context.Context, config *DeltaRest
 	return nil
 }
 
-func populateBlocksForIncrementalRestore(bsDriver BackupStoreDriver, lastBackup, backup *Backup) (<-chan *Block, <-chan error) {
+// sendBlock sends one block to the restore workers. It returns false if ctx is
+// cancelled first, so the sender does not block forever once the workers have
+// stopped reading.
+func sendBlock(ctx context.Context, blockChan chan<- *Block, block *Block) bool {
+	select {
+	case blockChan <- block:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func populateBlocksForIncrementalRestore(ctx context.Context, bsDriver BackupStoreDriver, lastBackup, backup *Backup) (<-chan *Block, <-chan error) {
 	blockChan := make(chan *Block, 10)
 	errChan := make(chan error, 1)
 
@@ -1135,18 +1153,22 @@ func populateBlocksForIncrementalRestore(bsDriver BackupStoreDriver, lastBackup,
 
 		for b, l := 0, 0; b < len(backup.Blocks) || l < len(lastBackup.Blocks); {
 			if b >= len(backup.Blocks) {
-				blockChan <- &Block{
+				if !sendBlock(ctx, blockChan, &Block{
 					offset:      lastBackup.Blocks[l].Offset,
 					isZeroBlock: true,
+				}) {
+					return
 				}
 				l++
 				continue
 			}
 			if l >= len(lastBackup.Blocks) {
-				blockChan <- &Block{
+				if !sendBlock(ctx, blockChan, &Block{
 					offset:            backup.Blocks[b].Offset,
 					blockChecksum:     backup.Blocks[b].BlockChecksum,
 					compressionMethod: backup.CompressionMethod,
+				}) {
+					return
 				}
 				b++
 				continue
@@ -1156,25 +1178,31 @@ func populateBlocksForIncrementalRestore(bsDriver BackupStoreDriver, lastBackup,
 			lB := lastBackup.Blocks[l]
 			if bB.Offset == lB.Offset {
 				if bB.BlockChecksum != lB.BlockChecksum {
-					blockChan <- &Block{
+					if !sendBlock(ctx, blockChan, &Block{
 						offset:            bB.Offset,
 						blockChecksum:     bB.BlockChecksum,
 						compressionMethod: backup.CompressionMethod,
+					}) {
+						return
 					}
 				}
 				b++
 				l++
 			} else if bB.Offset < lB.Offset {
-				blockChan <- &Block{
+				if !sendBlock(ctx, blockChan, &Block{
 					offset:            bB.Offset,
 					blockChecksum:     bB.BlockChecksum,
 					compressionMethod: backup.CompressionMethod,
+				}) {
+					return
 				}
 				b++
 			} else {
-				blockChan <- &Block{
+				if !sendBlock(ctx, blockChan, &Block{
 					offset:      lB.Offset,
 					isZeroBlock: true,
+				}) {
+					return
 				}
 				l++
 			}
@@ -1184,7 +1212,7 @@ func populateBlocksForIncrementalRestore(bsDriver BackupStoreDriver, lastBackup,
 	return blockChan, errChan
 }
 
-func populateBlocksForFullRestore(bsDriver BackupStoreDriver, backup *Backup) (<-chan *Block, <-chan error) {
+func populateBlocksForFullRestore(ctx context.Context, bsDriver BackupStoreDriver, backup *Backup) (<-chan *Block, <-chan error) {
 	blockChan := make(chan *Block, 10)
 	errChan := make(chan error, 1)
 
@@ -1193,10 +1221,12 @@ func populateBlocksForFullRestore(bsDriver BackupStoreDriver, backup *Backup) (<
 		defer close(errChan)
 
 		for _, block := range backup.Blocks {
-			blockChan <- &Block{
+			if !sendBlock(ctx, blockChan, &Block{
 				offset:            block.Offset,
 				blockChecksum:     block.BlockChecksum,
 				compressionMethod: backup.CompressionMethod,
+			}) {
+				return
 			}
 		}
 	}()
@@ -1274,11 +1304,17 @@ func performIncrementalRestore(ctx context.Context, bsDriver BackupStoreDriver, 
 	var err error
 	concurrentLimit := config.ConcurrentLimit
 
+	// The restore ends with the first error or completion below. Cancel ctx so
+	// the goroutines still feeding and writing blocks exit, without relying on
+	// the caller to cancel.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	progress := &progress{
 		totalBlockCounts: int64(len(backup.Blocks) + len(lastBackup.Blocks)),
 	}
 
-	blockChan, errChan := populateBlocksForIncrementalRestore(bsDriver, lastBackup, backup)
+	blockChan, errChan := populateBlocksForIncrementalRestore(ctx, bsDriver, lastBackup, backup)
 
 	errorChans := []<-chan error{errChan}
 	for i := 0; i < int(concurrentLimit); i++ {
