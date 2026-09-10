@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -70,6 +71,12 @@ func (f *fakeS3Server) handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		_, _ = fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
 <CompleteMultipartUploadResult><Bucket>test-bucket</Bucket><Key>test-key</Key><ETag>"complete-etag"</ETag></CompleteMultipartUploadResult>`)
+	case r.Method == http.MethodGet && q.Has("list-type"):
+		// ListObjectsV2: reply with a credential error to exercise service.ListObjects error formatting.
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>InvalidAccessKeyId</Code><Message>The AWS Access Key Id you provided does not exist in our records.</Message><RequestId>deadbeefdeadbeef</RequestId></Error>`)
 	case r.Method == http.MethodPut:
 		w.Header().Set("ETag", `"put-etag"`)
 		w.WriteHeader(http.StatusOK)
@@ -228,3 +235,30 @@ func (f *fakeSizedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	}
 	return f.pos, nil
 }
+
+// TestListObjectsErrorMessageHasNoPointerAddresses is a regression test for longhorn/longhorn#13831: the list error must not leak aws.String pointer addresses that change every call.
+func TestListObjectsErrorMessageHasNoPointerAddresses(t *testing.T) {
+	server := newFakeS3Server()
+	defer server.Close()
+
+	svc := newTestService(t, server.URL)
+
+	_, _, err := svc.ListObjects(context.Background(), "some/prefix/", "/")
+	if err == nil {
+		t.Fatal("expected ListObjects to fail against the fake credential-error backend")
+	}
+
+	msg := err.Error()
+	if pointerAddressPattern.MatchString(msg) {
+		t.Fatalf("error message leaks Go pointer address(es) %v: %s",
+			pointerAddressPattern.FindAllString(msg, -1), msg)
+	}
+
+	if !strings.Contains(msg, "Bucket:test-bucket") ||
+		!strings.Contains(msg, "Prefix:some/prefix/") ||
+		!strings.Contains(msg, "Delimiter:/") {
+		t.Fatalf("error message dropped the request parameters: %s", msg)
+	}
+}
+
+var pointerAddressPattern = regexp.MustCompile(`0x[0-9a-fA-F]{6,}`)
