@@ -39,8 +39,7 @@ func newCountingDriver(t *testing.T, backupURL string) (*BackupStoreDriver, *cou
 	return drv, crt
 }
 
-// nestedWalk reproduces the pre-fix getBlockNamesForVolume walk: one List()
-// per directory level (base, each lv1 shard, each lv2 shard).
+// nestedWalk reproduces the pre-fix getBlockNamesForVolume walk: one List() per directory level.
 func nestedWalk(t *testing.T, driver *BackupStoreDriver, blockPathBase string) []string {
 	t.Helper()
 	names := []string{}
@@ -70,10 +69,7 @@ func nestedWalk(t *testing.T, driver *BackupStoreDriver, blockPathBase string) [
 	return names
 }
 
-// TestRecursiveVsNestedListingRequestCountAgainstB2 measures the real number
-// of S3 ListObjectsV2 requests issued to a Backblaze B2 bucket by the old
-// nested-directory walk versus the new single recursive listing, over an
-// identical block tree. Skipped unless LONGHORN_B2_* env is set.
+// TestRecursiveVsNestedListingRequestCountAgainstB2 counts real B2 list requests for the old nested walk vs the new recursive listing. Skipped unless LONGHORN_B2_* env is set.
 func TestRecursiveVsNestedListingRequestCountAgainstB2(t *testing.T) {
 	endpoint := os.Getenv("LONGHORN_B2_ENDPOINT")
 	region := os.Getenv("LONGHORN_B2_REGION")
