@@ -634,18 +634,33 @@ func getBlockInfos(bsDriver backupstore.BackupStoreDriver) (map[string]*common.B
 func cleanupBlocks(log *logrus.Entry, driver backupstore.BackupStoreDriver, blockMap map[string]*common.BlockInfo) error {
 	var deletionFailures []string
 	deletedBlockCount := int64(0)
-	for _, blk := range blockMap {
-		if common.IsBlockSafeToDelete(blk) {
-			if err := driver.Remove(blk.Path); err != nil {
-				deletionFailures = append(deletionFailures, blk.Checksum)
-				continue
+
+	if remover, ok := driver.(backupstore.ExactFileRemover); ok {
+		if err := backupstore.RemoveExactFiles(remover, func(yield func(string) bool) {
+			for _, blk := range blockMap {
+				if common.IsBlockSafeToDelete(blk) {
+					deletedBlockCount++
+					if !yield(blk.Path) {
+						return
+					}
+				}
 			}
-			deletedBlockCount++
+		}); err != nil {
+			return errors.Wrap(err, "failed to delete backing image blocks")
+		}
+	} else {
+		for _, blk := range blockMap {
+			if common.IsBlockSafeToDelete(blk) {
+				if err := driver.Remove(blk.Path); err != nil {
+					deletionFailures = append(deletionFailures, blk.Checksum)
+					continue
+				}
+				deletedBlockCount++
+			}
 		}
 	}
 
 	log.Infof("Removed %v blocks", deletedBlockCount)
-
 	if len(deletionFailures) > 0 {
 		return fmt.Errorf("failed to delete blocks: %v", deletionFailures)
 	}

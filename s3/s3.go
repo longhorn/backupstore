@@ -7,10 +7,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/cockroachdb/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/longhorn/backupstore"
@@ -28,6 +31,10 @@ type BackupStoreDriver struct {
 
 const (
 	KIND = "s3"
+
+	// Deletion locks can overlap, so keep each operation's pressure conservative.
+	maxConcurrentExactFileRemovals = 8
+	maxRemovalFailureSamples       = 10
 )
 
 func init() {
@@ -167,6 +174,74 @@ func (s *BackupStoreDriver) FileTime(filePath string) time.Time {
 func (s *BackupStoreDriver) Remove(path string) error {
 	ctx := context.Background()
 	return s.service.DeleteObjects(ctx, s.updatePath(path))
+}
+
+// RemoveFiles removes exact object keys using bounded concurrent DeleteObject
+// requests. It intentionally does not use the S3 multi-object delete API,
+// which is unsupported by some S3-compatible providers such as GCS.
+func (s *BackupStoreDriver) RemoveFiles(paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+	svc, err := s.service.newInstance(ctx, false)
+	if err != nil {
+		return errors.Wrap(err, "failed to get a new s3 client instance before removing exact objects")
+	}
+	defer s.service.Close()
+
+	return removeFiles(ctx, svc, s.service.Bucket, paths, s.updatePath, maxConcurrentExactFileRemovals)
+}
+
+func removeFiles(ctx context.Context, svc objectDeleteAPI, bucket string, paths []string,
+	updatePath func(string) string, concurrentLimit int) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	if concurrentLimit < 1 {
+		return fmt.Errorf("exact file removal concurrency must be greater than zero")
+	}
+
+	workerCount := min(concurrentLimit, len(paths))
+	jobs := make(chan string, workerCount)
+
+	var (
+		wg             sync.WaitGroup
+		failureLock    sync.Mutex
+		failureCount   int
+		failureSamples = make([]string, 0, min(maxRemovalFailureSamples, len(paths)))
+	)
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				key := updatePath(path)
+				if err := deleteObject(ctx, svc, bucket, key); err != nil {
+					failureLock.Lock()
+					failureCount++
+					if len(failureSamples) < maxRemovalFailureSamples {
+						failureSamples = append(failureSamples, fmt.Sprintf("%s: %v", path, err))
+					}
+					failureLock.Unlock()
+				}
+			}
+		}()
+	}
+
+	for _, path := range paths {
+		jobs <- path
+	}
+	close(jobs)
+	wg.Wait()
+
+	if failureCount > 0 {
+		sort.Strings(failureSamples)
+		return fmt.Errorf("failed to delete %d exact objects (sample errors: %v)", failureCount, failureSamples)
+	}
+	return nil
 }
 
 func (s *BackupStoreDriver) Read(src string) (io.ReadCloser, error) {
