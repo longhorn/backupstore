@@ -75,3 +75,12 @@ func (v *BackupStoreDriver) Kind() string {
 func (v *BackupStoreDriver) GetURL() string {
 	return v.destURL
 }
+
+// ListRecursive implements backupstore.RecursiveLister. vfs operates on a
+// plain local directory (not a network mount), so a single local
+// filepath.Walk pass is strictly cheaper than the nested List() walk it
+// replaces. See FileSystemOperator.ListRecursiveLocal for why nfs/cifs
+// don't get this for free via embedding.
+func (v *BackupStoreDriver) ListRecursive(path string) ([]string, error) {
+	return v.ListRecursiveLocal(path)
+}
