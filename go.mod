@@ -20,7 +20,7 @@ require (
 	github.com/slok/goresilience v0.2.0
 	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.12.1
-	github.com/urfave/cli/v3 v3.13.0
+	github.com/urfave/cli/v3 v3.14.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sys v0.47.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
