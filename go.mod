@@ -16,7 +16,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/longhorn/go-common-libs v0.0.0-20260909075701-1a37e0e5083e
 	github.com/pierrec/lz4/v4 v4.1.33
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.2
 	github.com/slok/goresilience v0.2.0
 	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.12.1
