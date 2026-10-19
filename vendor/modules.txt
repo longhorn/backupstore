@@ -395,8 +395,8 @@ go.yaml.in/yaml/v3
 # golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297
 ## explicit; go 1.25.0
 golang.org/x/exp/constraints
-# golang.org/x/net v0.58.0
-## explicit; go 1.25.0
+# golang.org/x/net v0.60.0
+## explicit; go 1.26.0
 golang.org/x/net/http/httpguts
 golang.org/x/net/http/httpproxy
 golang.org/x/net/http2
@@ -404,14 +404,14 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/httpcommon
 golang.org/x/net/internal/httpsfv
-# golang.org/x/sys v0.47.0
-## explicit; go 1.25.0
+# golang.org/x/sys v0.48.0
+## explicit; go 1.26.0
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/text v0.41.0
-## explicit; go 1.25.0
+# golang.org/x/text v0.42.0
+## explicit; go 1.26.0
 golang.org/x/text/cases
 golang.org/x/text/internal
 golang.org/x/text/internal/language
