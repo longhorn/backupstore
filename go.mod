@@ -14,7 +14,7 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/gammazero/workerpool v1.2.1
 	github.com/google/uuid v1.6.0
-	github.com/longhorn/go-common-libs v0.0.0-20260909075701-1a37e0e5083e
+	github.com/longhorn/go-common-libs v0.0.0-20261020004845-7682fc7901eb
 	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/sirupsen/logrus v1.10.2
 	github.com/slok/goresilience v0.2.0
