@@ -179,7 +179,7 @@ github.com/aws/aws-sdk-go-v2/service/ssooidc/types
 github.com/aws/aws-sdk-go-v2/service/sts
 github.com/aws/aws-sdk-go-v2/service/sts/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/sts/types
-# github.com/aws/smithy-go v1.28.4
+# github.com/aws/smithy-go v1.28.5
 ## explicit; go 1.24
 github.com/aws/smithy-go
 github.com/aws/smithy-go/auth
@@ -252,11 +252,11 @@ github.com/cockroachdb/redact/internal/markers
 github.com/cockroachdb/redact/internal/redact
 github.com/cockroachdb/redact/internal/rfmt
 github.com/cockroachdb/redact/internal/rfmt/fmtsort
-# github.com/gammazero/deque v1.2.1
-## explicit; go 1.24
+# github.com/gammazero/deque v1.2.2
+## explicit; go 1.26
 github.com/gammazero/deque
-# github.com/gammazero/workerpool v1.2.1
-## explicit; go 1.24
+# github.com/gammazero/workerpool v1.2.2
+## explicit; go 1.26
 github.com/gammazero/workerpool
 # github.com/getsentry/sentry-go v0.46.0
 ## explicit; go 1.25.0
