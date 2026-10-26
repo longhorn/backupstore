@@ -142,6 +142,49 @@ func (s *BackupStoreDriver) List(listPath string) ([]string, error) {
 	return result, nil
 }
 
+// ListRecursive implements backupstore.RecursiveLister.
+//
+// Unlike List(), it omits the "/" delimiter so S3 returns every object
+// under the given prefix in a single paginated call sequence, instead
+// of requiring the caller to walk each intermediate "directory" level
+// with its own List() call. This is critical for backends that bill
+// per API request (e.g. Backblaze B2 Class C transactions): listing a
+// volume's blocks via the old nested List() walk could issue up to
+// 256*256 requests, while ListRecursive issues one request per 1000
+// objects returned.
+//
+// See https://github.com/longhorn/longhorn/issues/1547
+func (s *BackupStoreDriver) ListRecursive(listPath string) ([]string, error) {
+	var result []string
+
+	path := s.updatePath(listPath)
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+
+	// No delimiter: S3 returns every key under the prefix, flattened,
+	// instead of grouping the next path segment into CommonPrefixes.
+	contents, _, err := s.service.ListObjects(context.Background(), path, "")
+	if err != nil {
+		log.WithError(err).Error("Failed to recursively list s3")
+		return result, err
+	}
+
+	if len(contents) == 0 {
+		return result, nil
+	}
+
+	result = make([]string, 0, len(contents))
+	for _, obj := range contents {
+		r := strings.TrimPrefix(aws.ToString(obj.Key), path)
+		if r != "" {
+			result = append(result, r)
+		}
+	}
+
+	return result, nil
+}
+
 func (s *BackupStoreDriver) FileExists(filePath string) bool {
 	return s.FileSize(filePath) >= 0
 }
