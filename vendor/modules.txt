@@ -255,7 +255,7 @@ github.com/cockroachdb/redact/internal/rfmt/fmtsort
 # github.com/gammazero/deque v1.2.2
 ## explicit; go 1.26
 github.com/gammazero/deque
-# github.com/gammazero/workerpool v1.2.2
+# github.com/gammazero/workerpool v1.3.0
 ## explicit; go 1.26
 github.com/gammazero/workerpool
 # github.com/getsentry/sentry-go v0.46.0
