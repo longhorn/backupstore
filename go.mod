@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
 	github.com/aws/smithy-go v1.28.5
 	github.com/cockroachdb/errors v1.14.0
-	github.com/gammazero/workerpool v1.2.2
+	github.com/gammazero/workerpool v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/longhorn/go-common-libs v0.0.0-20261020101655-9488a43de04c
 	github.com/pierrec/lz4/v4 v4.1.33
