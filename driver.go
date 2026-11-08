@@ -27,6 +27,12 @@ type BackupStoreDriver interface {
 	Download(src, dst string) error
 }
 
+// RecursiveLister is an optional BackupStoreDriver capability, for a driver that can list a whole
+// tree in fewer calls than one List per directory.
+type RecursiveLister interface {
+	ListRecursive(path string) ([]string, error) // Behavior like "find path -type f", paths relative to path
+}
+
 var (
 	initializers map[string]InitFunc
 )

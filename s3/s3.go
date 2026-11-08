@@ -30,6 +30,8 @@ const (
 	KIND = "s3"
 )
 
+var _ backupstore.RecursiveLister = (*BackupStoreDriver)(nil)
+
 func init() {
 	if err := backupstore.RegisterDriver(KIND, initFunc); err != nil {
 		panic(err)
@@ -139,6 +141,30 @@ func (s *BackupStoreDriver) List(listPath string) ([]string, error) {
 		}
 	}
 
+	return result, nil
+}
+
+// ListRecursive sends ListObjectsV2 without a delimiter, so it costs one request per 1,000 objects
+// instead of one per directory.
+func (s *BackupStoreDriver) ListRecursive(listPath string) ([]string, error) {
+	path := s.updatePath(listPath)
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+
+	contents, _, err := s.service.ListObjects(context.Background(), path, "")
+	if err != nil {
+		log.WithError(err).Error("Failed to list s3 recursively")
+		return nil, err
+	}
+
+	result := make([]string, 0, len(contents))
+	for _, obj := range contents {
+		r := strings.TrimPrefix(aws.ToString(obj.Key), path)
+		if r != "" && !strings.HasSuffix(r, "/") { // a key ending in "/" is a directory marker, not a file
+			result = append(result, r)
+		}
+	}
 	return result, nil
 }
 

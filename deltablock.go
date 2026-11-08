@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -1596,8 +1597,12 @@ func cleanupBlocks(driver BackupStoreDriver, blockMap map[string]*BlockInfo, vol
 }
 
 func getBlockNamesForVolume(driver BackupStoreDriver, volumeName string) ([]string, error) {
-	names := []string{}
 	blockPathBase := getBlockPath(volumeName)
+	if lister, ok := driver.(RecursiveLister); ok {
+		return getBlockNamesRecursive(lister, blockPathBase)
+	}
+
+	names := []string{}
 	lv1Dirs, err := driver.List(blockPathBase)
 	// Directory doesn't exist
 	if err != nil {
@@ -1619,6 +1624,24 @@ func getBlockNamesForVolume(driver BackupStoreDriver, volumeName string) ([]stri
 		}
 	}
 
+	return util.ExtractNames(names, "", BLK_SUFFIX), nil
+}
+
+// getBlockNamesRecursive keeps only files at <layer1>/<layer2>/<name>, the depth the directory walk reads.
+func getBlockNamesRecursive(lister RecursiveLister, blockPathBase string) ([]string, error) {
+	files, err := lister.ListRecursive(blockPathBase)
+	if err != nil {
+		return nil, err
+	}
+
+	names := []string{}
+	for _, f := range files {
+		parts := strings.Split(strings.TrimLeft(f, "/"), "/")
+		if len(parts) != 3 {
+			continue
+		}
+		names = append(names, parts[2])
+	}
 	return util.ExtractNames(names, "", BLK_SUFFIX), nil
 }
 
