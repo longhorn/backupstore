@@ -165,8 +165,36 @@ func GetAllBackupBackingImageNames(driver backupstore.BackupStoreDriver) ([]stri
 }
 
 func getAllBlockNames(driver backupstore.BackupStoreDriver) ([]string, error) {
-	names := []string{}
 	blockPathBase := getBackingImageBlockPath()
+
+	// See getBlockNamesForVolume in the top-level package for rationale:
+	// prefer a single recursive listing over walking the sharded
+	// 2-level block directory tree with one List() call per directory.
+	// https://github.com/longhorn/longhorn/issues/1547
+	if recDriver, ok := driver.(backupstore.RecursiveLister); ok {
+		// A missing directory is not an error: both the s3 and fsops
+		// ListRecursive implementations already return (nil, nil) for a
+		// prefix/path that doesn't exist, matching List()'s existing
+		// behavior below. Any error returned here is a genuine failure
+		// (auth, network, pagination, etc.) and must propagate to
+		// getBlockInfos/the caller rather than being silently treated as
+		// "no blocks" - otherwise backing-image deletion would report
+		// success while silently skipping block discovery and cleanup.
+		paths, err := recDriver.ListRecursive(blockPathBase)
+		if err != nil {
+			return nil, err
+		}
+		// ListRecursive returns paths relative to blockPathBase, e.g.
+		// "aa/bb/<checksum>.blk". ExtractNames/ValidateName only accept
+		// bare file names, so strip the shard directory components first.
+		baseNames := make([]string, len(paths))
+		for i, p := range paths {
+			baseNames[i] = filepath.Base(p)
+		}
+		return util.ExtractNames(baseNames, "", BlkSuffix), nil
+	}
+
+	names := []string{}
 	lv1Dirs, err := driver.List(blockPathBase)
 	// Directory doesn't exist
 	if err != nil {

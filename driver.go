@@ -27,6 +27,24 @@ type BackupStoreDriver interface {
 	Download(src, dst string) error
 }
 
+// RecursiveLister is an optional extension of BackupStoreDriver.
+// Drivers whose backend supports a native recursive/flat listing
+// (e.g. S3 ListObjectsV2 without a delimiter) should implement this
+// so that callers can enumerate deeply nested paths (such as the
+// 2-level sharded block directories) using O(1) paginated requests
+// instead of walking every intermediate directory level one List()
+// call at a time.
+//
+// See https://github.com/longhorn/longhorn/issues/1547: without this,
+// each poll/backup enumerates blocks via up to 256*256 individual
+// List() calls, which on S3-compatible backends (e.g. Backblaze B2)
+// translates into one billable API request per call.
+type RecursiveLister interface {
+	// ListRecursive returns all object keys (relative to path) found
+	// anywhere underneath path, equivalent to "find" rather than "ls".
+	ListRecursive(path string) ([]string, error)
+}
+
 var (
 	initializers map[string]InitFunc
 )

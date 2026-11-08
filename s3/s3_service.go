@@ -225,8 +225,9 @@ func (s *service) ListObjects(ctx context.Context, key, delimiter string) ([]typ
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to list objects with param: %+v error: %v",
-				params, parseAwsError(err))
+			// Dereference params: %+v would print aws.String pointer addresses that change every call, defeating longhorn-manager's DeepEqual and causing a reconcile storm (longhorn/longhorn#1547, #13831).
+			return nil, nil, fmt.Errorf("failed to list objects with param: {Bucket:%s Prefix:%s Delimiter:%s} error: %v",
+				aws.ToString(params.Bucket), aws.ToString(params.Prefix), aws.ToString(params.Delimiter), parseAwsError(err))
 		}
 		objects = append(objects, page.Contents...)
 		commonPrefixes = append(commonPrefixes, page.CommonPrefixes...)
