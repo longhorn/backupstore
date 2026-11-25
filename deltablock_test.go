@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -832,6 +833,42 @@ func TestRestoreDeltaBlockBackupReportsCloseVolumeDevFailure(t *testing.T) {
 	assert.Equal(PROGRESS_PERCENTAGE_BACKUP_SNAPSHOT, finalStatus.progress)
 	assert.ErrorIs(finalStatus.err, ops.closeErr)
 	assert.Contains(finalStatus.err.Error(), "failed to close volume device")
+}
+
+func TestRestoreDeltaBlockBackupFailsFastOnMissingBlock(t *testing.T) {
+	assert := assert.New(t)
+
+	driver := newDeltaMockStoreDriver(t)
+	backupURL := seedFullBackup(t, "backup-1")
+
+	removedBlocks := 0
+	err := afero.Walk(driver.fs, getBlockPath(deltaVolumeName), func(path string, info fs.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !info.IsDir() && filepath.Ext(path) == BLK_SUFFIX {
+			removedBlocks++
+			return driver.fs.Remove(path)
+		}
+		return nil
+	})
+	assert.NoError(err)
+	assert.Positive(removedBlocks)
+
+	ops := newMockRestoreOps()
+	err = RestoreDeltaBlockBackup(context.Background(), newDeltaRestoreConfig(t, backupURL, ops))
+	assert.NoError(err)
+
+	// A missing block is not retried: retrying it with the full backoff takes
+	// minutes, far longer than waitForTerminalStatus waits. The restore is
+	// reported as failed, not as cancelled, so the engines do not restart it
+	// as if it had been interrupted.
+	finalStatus := ops.waitForTerminalStatus(t)
+	if !assert.ErrorIs(finalStatus.err, fs.ErrNotExist) {
+		return
+	}
+	assert.NotContains(finalStatus.err.Error(), types.ErrorMsgRestoreCancelled)
+	assert.Less(finalStatus.progress, PROGRESS_PERCENTAGE_BACKUP_TOTAL)
 }
 
 func TestRestoreDeltaBlockBackupReportsCancellation(t *testing.T) {

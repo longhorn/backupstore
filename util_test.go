@@ -3,11 +3,27 @@ package backupstore
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"io/fs"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestRetryWithBackoffStopsOnMissingBlock(t *testing.T) {
+	assert := assert.New(t)
+
+	calls := 0
+	_, err := retryWithBackoff(context.Background(), func() (io.Reader, error) {
+		calls++
+		return nil, fmt.Errorf("failed to read block: %w", fs.ErrNotExist)
+	})
+
+	assert.ErrorIs(err, fs.ErrNotExist)
+	assert.Equal(1, calls)
+}
 
 // receiveWithTimeout returns the next value from ch, or fails the test if none arrives in time.
 func receiveWithTimeout(t *testing.T, ch <-chan error) (err error, ok bool) {
