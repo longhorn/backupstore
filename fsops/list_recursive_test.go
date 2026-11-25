@@ -16,11 +16,9 @@ func (t *testOps) LocalPath(path string) string {
 }
 
 func TestFileSystemOperatorListRecursiveLocal(t *testing.T) {
-	root, err := os.MkdirTemp("", "fsops-recursive-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
+	// t.TempDir() cleans itself up and reports failures, so there is no
+	// unchecked os.RemoveAll return value for errcheck to flag.
+	root := t.TempDir()
 
 	ops := &testOps{root: root}
 	f := NewFileSystemOperator(ops)
@@ -60,11 +58,7 @@ func TestFileSystemOperatorListRecursiveLocal(t *testing.T) {
 }
 
 func TestFileSystemOperatorListRecursiveLocalMissingDir(t *testing.T) {
-	root, err := os.MkdirTemp("", "fsops-recursive-missing-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	ops := &testOps{root: root}
 	f := NewFileSystemOperator(ops)
