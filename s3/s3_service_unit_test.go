@@ -5,12 +5,77 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/aws/smithy-go"
+	"github.com/cockroachdb/errors"
 )
+
+func TestIsObjectNotFound(t *testing.T) {
+	testCases := map[string]struct {
+		err      error
+		expected bool
+	}{
+		"missing key":         {err: &smithy.GenericAPIError{Code: "NoSuchKey"}, expected: true},
+		"wrapped missing key": {err: fmt.Errorf("operation error: %w", &smithy.GenericAPIError{Code: "NoSuchKey"}), expected: true},
+		"other API error":     {err: &smithy.GenericAPIError{Code: "SlowDown"}, expected: false},
+		"transport error":     {err: errors.New("connection reset"), expected: false},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			if got := isObjectNotFound(testCase.err); got != testCase.expected {
+				t.Fatalf("isObjectNotFound() = %v, expected %v", got, testCase.expected)
+			}
+		})
+	}
+}
+
+// TestGetObjectMarksMissingKey verifies that GetObject marks a missing key as
+// fs.ErrNotExist, which the block restore relies on to stop retrying, and
+// leaves other API errors unmarked.
+func TestGetObjectMarksMissingKey(t *testing.T) {
+	testCases := map[string]struct {
+		statusCode     int
+		errorCode      string
+		expectNotExist bool
+	}{
+		"missing key": {statusCode: http.StatusNotFound, errorCode: "NoSuchKey", expectNotExist: true},
+		// A non-retryable code, so the SDK does not retry and slow the test.
+		"other API error": {statusCode: http.StatusForbidden, errorCode: "AccessDenied", expectNotExist: false},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(testCase.statusCode)
+				_, _ = fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>%s</Code><Message>test error</Message></Error>`, testCase.errorCode)
+			}))
+			defer server.Close()
+
+			svc := newTestService(t, server.URL)
+
+			_, err := svc.GetObject(context.Background(), "blocks/missing.blk")
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			// The mark is visible only to cockroachdb's errors.Is.
+			if got := errors.Is(err, fs.ErrNotExist); got != testCase.expectNotExist {
+				t.Fatalf("errors.Is(err, fs.ErrNotExist) = %v, expected %v: %v", got, testCase.expectNotExist, err)
+			}
+			if !strings.Contains(err.Error(), testCase.errorCode) {
+				t.Fatalf("expected the error text to keep %q, got: %v", testCase.errorCode, err)
+			}
+		})
+	}
+}
 
 // recordedRequest captures just enough information about an incoming request
 // to assert which S3 operation (single PutObject vs multipart upload) was
