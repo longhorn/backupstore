@@ -23,6 +23,7 @@ import (
 	"github.com/cockroachdb/errors"
 
 	smithyhttp "github.com/aws/smithy-go/transport/http"
+	"github.com/longhorn/backupstore"
 	bhttp "github.com/longhorn/backupstore/http"
 )
 
@@ -401,6 +402,86 @@ func (s *service) DeleteObjects(ctx context.Context, key string) error {
 		if err != nil {
 			log.Errorf("Failed to delete object: %v error: %v", aws.ToString(object.Key), parseAwsError(err))
 			deletionFailures = append(deletionFailures, aws.ToString(object.Key))
+		}
+	}
+
+	if len(deletionFailures) > 0 {
+		return fmt.Errorf("failed to delete objects %v", deletionFailures)
+	}
+
+	return nil
+}
+
+// DeleteObjectByKey deletes one object whose key the caller already holds.
+//
+// DeleteObjects above first lists the prefix, which is what it needs when the
+// argument is a directory, but it is a wasted (and billable) request when the
+// caller already knows the exact key - which is the case for every block during
+// backup GC. This is the difference between two requests per block and one.
+//
+// https://github.com/longhorn/longhorn/issues/14510
+func (s *service) DeleteObjectByKey(ctx context.Context, key string) error {
+	svc, err := s.newInstance(ctx, false)
+	if err != nil {
+		return errors.Wrap(err, "failed to get a new s3 client instance before removing object")
+	}
+	defer s.Close()
+
+	if _, err := svc.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.Bucket),
+		Key:    aws.String(key),
+	}); err != nil {
+		return errors.Wrapf(parseAwsError(err), "failed to delete object: %v", key)
+	}
+
+	return nil
+}
+
+// DeleteObjectsByKeys deletes a set of keys the caller already holds, with one
+// request per backupstore.MaxBatchDeleteKeys (1000) keys instead of one per
+// key. Quiet mode is used so the response only carries the keys that failed.
+//
+// https://github.com/longhorn/longhorn/issues/14510
+func (s *service) DeleteObjectsByKeys(ctx context.Context, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	svc, err := s.newInstance(ctx, false)
+	if err != nil {
+		return errors.Wrap(err, "failed to get a new s3 client instance before removing objects")
+	}
+	defer s.Close()
+
+	var deletionFailures []string
+	for start := 0; start < len(keys); start += backupstore.MaxBatchDeleteKeys {
+		end := start + backupstore.MaxBatchDeleteKeys
+		if end > len(keys) {
+			end = len(keys)
+		}
+		chunk := keys[start:end]
+
+		objects := make([]types.ObjectIdentifier, 0, len(chunk))
+		for _, key := range chunk {
+			objects = append(objects, types.ObjectIdentifier{Key: aws.String(key)})
+		}
+
+		out, err := svc.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(s.Bucket),
+			Delete: &types.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			log.Errorf("Failed to batch delete %v objects: %v", len(chunk), parseAwsError(err))
+			deletionFailures = append(deletionFailures, chunk...)
+			continue
+		}
+
+		for _, e := range out.Errors {
+			log.Errorf("Failed to delete object: %v error: %v %v", aws.ToString(e.Key), aws.ToString(e.Code), aws.ToString(e.Message))
+			deletionFailures = append(deletionFailures, aws.ToString(e.Key))
 		}
 	}
 

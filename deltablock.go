@@ -1564,16 +1564,36 @@ func cleanupBlocks(driver BackupStoreDriver, blockMap map[string]*BlockInfo, vol
 	var deletionFailures []string
 	activeBlockCount := int64(0)
 	deletedBlockCount := int64(0)
+
+	// Collect the blocks that are safe to delete first, so a driver that can
+	// batch deletions needs one request per MaxBatchDeleteKeys instead of one
+	// request per block. https://github.com/longhorn/longhorn/issues/14510
+	var safeBlocks []*BlockInfo
 	for _, blk := range blockMap {
 		if isBlockSafeToDelete(blk) {
+			safeBlocks = append(safeBlocks, blk)
+		} else if isBlockReferenced(blk) && isBlockPresent(blk) {
+			activeBlockCount++
+		}
+	}
+
+	if remover, ok := driver.(BatchRemover); ok {
+		paths := make([]string, 0, len(safeBlocks))
+		for _, blk := range safeBlocks {
+			paths = append(paths, blk.path)
+		}
+		if err := remover.RemoveBatch(paths); err != nil {
+			return err
+		}
+		deletedBlockCount = int64(len(safeBlocks))
+	} else {
+		for _, blk := range safeBlocks {
 			if err := driver.Remove(blk.path); err != nil {
 				deletionFailures = append(deletionFailures, blk.checksum)
 				continue
 			}
 			log.Debugf("Deleted block %v for volume %v", blk.checksum, volume)
 			deletedBlockCount++
-		} else if isBlockReferenced(blk) && isBlockPresent(blk) {
-			activeBlockCount++
 		}
 	}
 
