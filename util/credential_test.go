@@ -1,7 +1,6 @@
 package util
 
 import (
-	"os"
 	"testing"
 
 	"github.com/longhorn/backupstore/types"
@@ -41,8 +40,10 @@ func TestGetBackupCredentialForwardsEncryptionEnv(t *testing.T) {
 }
 
 func TestGetBackupCredentialOmitsUnsetEncryptionEnv(t *testing.T) {
-	os.Unsetenv(types.BackupEncryptionSecret)
-	os.Unsetenv(types.BackupEncryptionKey)
+	// Empty values must be treated as unset so NFS (and other) backups stay plaintext
+	// when encryption env vars are not configured.
+	t.Setenv(types.BackupEncryptionSecret, "")
+	t.Setenv(types.BackupEncryptionKey, "")
 
 	credential, err := GetBackupCredential("nfs://nfs-server.example.com:/backups")
 	if err != nil {
