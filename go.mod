@@ -15,6 +15,7 @@ require (
 	github.com/gammazero/workerpool v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/longhorn/go-common-libs v0.0.0-20261020101655-9488a43de04c
+	github.com/minio/sio v0.5.1
 	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/sirupsen/logrus v1.10.2
 	github.com/slok/goresilience v0.2.0
@@ -71,6 +72,7 @@ require (
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
