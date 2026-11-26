@@ -634,8 +634,28 @@ func getBlockInfos(bsDriver backupstore.BackupStoreDriver) (map[string]*common.B
 func cleanupBlocks(log *logrus.Entry, driver backupstore.BackupStoreDriver, blockMap map[string]*common.BlockInfo) error {
 	var deletionFailures []string
 	deletedBlockCount := int64(0)
+
+	// Collect the blocks to delete first so a driver that can batch deletions
+	// needs one request per MaxBatchDeleteKeys instead of one per block.
+	// https://github.com/longhorn/longhorn/issues/14510
+	var safeBlocks []*common.BlockInfo
 	for _, blk := range blockMap {
 		if common.IsBlockSafeToDelete(blk) {
+			safeBlocks = append(safeBlocks, blk)
+		}
+	}
+
+	if remover, ok := driver.(backupstore.BatchRemover); ok {
+		paths := make([]string, 0, len(safeBlocks))
+		for _, blk := range safeBlocks {
+			paths = append(paths, blk.Path)
+		}
+		if err := remover.RemoveBatch(paths); err != nil {
+			return err
+		}
+		deletedBlockCount = int64(len(safeBlocks))
+	} else {
+		for _, blk := range safeBlocks {
 			if err := driver.Remove(blk.Path); err != nil {
 				deletionFailures = append(deletionFailures, blk.Checksum)
 				continue

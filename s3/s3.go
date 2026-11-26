@@ -166,7 +166,48 @@ func (s *BackupStoreDriver) FileTime(filePath string) time.Time {
 
 func (s *BackupStoreDriver) Remove(path string) error {
 	ctx := context.Background()
+
+	// A path without a trailing "/" is a single object the caller already knows
+	// about, not a prefix. Deleting it directly skips the ListObjects that
+	// service.DeleteObjects does before deleting, which was one billable request
+	// per block during backup GC.
+	// https://github.com/longhorn/longhorn/issues/14510
+	if !strings.HasSuffix(path, "/") {
+		return s.service.DeleteObjectByKey(ctx, s.updatePath(path))
+	}
+
 	return s.service.DeleteObjects(ctx, s.updatePath(path))
+}
+
+// RemoveBatch implements backupstore.BatchRemover: known keys are deleted with
+// one request per backupstore.MaxBatchDeleteKeys instead of one per key.
+// Paths ending in "/" keep the prefix semantics of Remove().
+func (s *BackupStoreDriver) RemoveBatch(paths []string) error {
+	ctx := context.Background()
+
+	keys := make([]string, 0, len(paths))
+	prefixes := make([]string, 0)
+	for _, path := range paths {
+		if strings.HasSuffix(path, "/") {
+			prefixes = append(prefixes, path)
+			continue
+		}
+		keys = append(keys, s.updatePath(path))
+	}
+
+	if len(keys) > 0 {
+		if err := s.service.DeleteObjectsByKeys(ctx, keys); err != nil {
+			return err
+		}
+	}
+
+	for _, path := range prefixes {
+		if err := s.service.DeleteObjects(ctx, s.updatePath(path)); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *BackupStoreDriver) Read(src string) (io.ReadCloser, error) {
