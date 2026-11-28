@@ -14,7 +14,7 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/gammazero/workerpool v1.3.0
 	github.com/google/uuid v1.6.0
-	github.com/longhorn/go-common-libs v0.0.0-20261020101655-9488a43de04c
+	github.com/longhorn/go-common-libs v0.0.0-20261114062950-d3ec8b4403d1
 	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/sirupsen/logrus v1.10.2
 	github.com/slok/goresilience v0.2.0
@@ -52,7 +52,7 @@ require (
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/gammazero/deque v1.2.2 // indirect
 	github.com/getsentry/sentry-go v0.46.0 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -73,7 +73,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
